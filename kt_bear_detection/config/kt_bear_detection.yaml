@@ -15,4 +15,5 @@ kt_bear_detection:
     log_detections: false
     publish_debug_log: true
     debug_raw_candidates: false
+    debug_bbox_mapping: false
     max_targets: 1

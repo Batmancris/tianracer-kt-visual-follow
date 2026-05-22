@@ -175,6 +175,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
     log_detections_ = this->declare_parameter<bool>("log_detections", false);
     publish_debug_log_ = this->declare_parameter<bool>("publish_debug_log", true);
     debug_raw_candidates_ = this->declare_parameter<bool>("debug_raw_candidates", false);
+    debug_bbox_mapping_ = this->declare_parameter<bool>("debug_bbox_mapping", false);
     max_targets_ = this->declare_parameter<int>("max_targets", 1);
 
     if (Init() != 0 || GetModelInputSize(0, model_input_width_, model_input_height_) < 0) {
@@ -236,6 +237,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
       model_input_height_,
       box_format_,
       debug_raw_candidates_,
+      debug_bbox_mapping_,
     };
 
     if (kt_bear_detection::ParseDetections(node_output, parser_config, detections) != 0) {
@@ -290,6 +292,26 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
         (xmin + xmax) * 0.5,
         (ymin + ymax) * 0.5,
       });
+    }
+
+    if (debug_bbox_mapping_ && !detections.empty()) {
+      const auto &det0 = *detections[0];
+      const float m_x1 = std::clamp((det0.xmin - bear_output->pad_x) * bear_output->scale_to_original, 0.0F, static_cast<float>(bear_output->original_width - 1));
+      const float m_y1 = std::clamp((det0.ymin - bear_output->pad_y) * bear_output->scale_to_original, 0.0F, static_cast<float>(bear_output->original_height - 1));
+      const float m_x2 = std::clamp((det0.xmax - bear_output->pad_x) * bear_output->scale_to_original, 0.0F, static_cast<float>(bear_output->original_width - 1));
+      const float m_y2 = std::clamp((det0.ymax - bear_output->pad_y) * bear_output->scale_to_original, 0.0F, static_cast<float>(bear_output->original_height - 1));
+      RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "bbox_map input=(%d,%d) model=(%d,%d) scale=%.4f pad_x=%.1f pad_y=%.1f "
+        "model_bbox=(%.1f,%.1f,%.1f,%.1f) "
+        "mapped=(%.1f,%.1f,%.1f,%.1f) conf=%.2f",
+        bear_output->original_width, bear_output->original_height,
+        parser_config.input_width, parser_config.input_height,
+        bear_output->scale_to_original,
+        bear_output->pad_x, bear_output->pad_y,
+        det0.xmin, det0.ymin, det0.xmax, det0.ymax,
+        m_x1, m_y1, m_x2, m_y2,
+        det0.score);
     }
 
     ApplyStableTargetFilter(candidates, *pub_msg);
@@ -467,6 +489,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
   bool log_detections_{false};
   bool publish_debug_log_{true};
   bool debug_raw_candidates_{false};
+  bool debug_bbox_mapping_{false};
   int max_targets_{1};
   kt_bear_detection::YoloBoxFormat box_format_{kt_bear_detection::YoloBoxFormat::kCxcywh};
   int model_input_width_{-1};
