@@ -69,7 +69,7 @@ class FollowFsm {
   bool check_stop_conditions(const Input &in, const char *&reason);
   bool is_visual_timeout(const Input &in) const;
   bool is_lidar_timeout(const Input &in) const;
-  bool is_theta_jump(const Input &in) const;
+  bool is_theta_jump(const Input &in);
 };
 
 }  // namespace kt_visual_lidar_follow
