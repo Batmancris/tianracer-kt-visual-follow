@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <opencv2/opencv.hpp>
@@ -75,7 +76,9 @@ std::shared_ptr<hobot::dnn_node::NV12PyramidInput> LetterboxBgrToNv12Pyramid(
   int target_h,
   float &scale_to_original,
   float &pad_x,
-  float &pad_y) {
+  float &pad_y,
+  cv::Mat *out_letterbox_bgr = nullptr,
+  std::vector<uint8_t> *out_nv12_buf = nullptr) {
   const int src_w = bgr.cols;
   const int src_h = bgr.rows;
 
@@ -100,10 +103,18 @@ std::shared_ptr<hobot::dnn_node::NV12PyramidInput> LetterboxBgrToNv12Pyramid(
   const int top = (target_h - resized_h) / 2;
   resized.copyTo(letterboxed(cv::Rect(left, top, resized_w, resized_h)));
 
+  if (out_letterbox_bgr) {
+    *out_letterbox_bgr = letterboxed.clone();
+  }
+
   // Convert BGR letterboxed image to NV12
   const int nv12_size = target_w * target_h * 3 / 2;
   auto nv12_buf = std::make_unique<uint8_t[]>(static_cast<std::size_t>(nv12_size));
   BgrToNv12(letterboxed, nv12_buf.get());
+
+  if (out_nv12_buf) {
+    out_nv12_buf->assign(nv12_buf.get(), nv12_buf.get() + nv12_size);
+  }
 
   // Build NV12 pyramid input for DNN
   auto pyramid = hobot::dnn_node::ImageProc::GetNV12PyramidFromNV12Img(
@@ -177,6 +188,9 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
     debug_raw_candidates_ = this->declare_parameter<bool>("debug_raw_candidates", false);
     debug_bbox_mapping_ = this->declare_parameter<bool>("debug_bbox_mapping", false);
     max_targets_ = this->declare_parameter<int>("max_targets", 1);
+    debug_post_nms_candidates_ = this->declare_parameter<bool>("debug_post_nms_candidates", false);
+    debug_post_nms_top_k_ = this->declare_parameter<int>("debug_post_nms_top_k", 8);
+    debug_dump_input_once_ = this->declare_parameter<bool>("debug_dump_input_once", false);
 
     if (Init() != 0 || GetModelInputSize(0, model_input_width_, model_input_height_) < 0) {
       RCLCPP_ERROR(this->get_logger(), "Failed to initialize kt_bear_detection");
@@ -205,6 +219,10 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
         for (const auto &p : params) {
           if (p.get_name() == "debug_bbox_mapping") {
             debug_bbox_mapping_ = p.as_bool();
+          } else if (p.get_name() == "debug_post_nms_candidates") {
+            debug_post_nms_candidates_ = p.as_bool();
+          } else if (p.get_name() == "debug_dump_input_once") {
+            debug_dump_input_once_ = p.as_bool();
           }
         }
         return result;
@@ -326,6 +344,31 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
         det0.score);
     }
 
+    if (debug_post_nms_candidates_) {
+      const int show_k = std::min(static_cast<int>(candidates.size()), debug_post_nms_top_k_);
+      std::ostringstream oss;
+      oss << "[post_nms] total=" << candidates.size()
+          << " img=" << bear_output->original_width << "x" << bear_output->original_height
+          << " model=" << parser_config.input_width << "x" << parser_config.input_height
+          << " scale=" << bear_output->scale_to_original
+          << " pad=(" << bear_output->pad_x << "," << bear_output->pad_y << ")\n";
+      for (int i = 0; i < show_k; ++i) {
+        const auto &c = candidates[i];
+        const auto &roi = c.target.rois.front().rect;
+        const float area_ratio = static_cast<float>(roi.width) * static_cast<float>(roi.height)
+          / static_cast<float>(bear_output->original_width * bear_output->original_height);
+        oss << "  [" << i << "] conf=" << c.target.rois.front().confidence
+            << " mapped=(" << roi.x_offset << "," << roi.y_offset
+            << "," << roi.width << "," << roi.height << ")"
+            << " area_ratio=" << area_ratio
+            << " center=(" << c.center_x << "," << c.center_y << ")"
+            << " selected=" << (i == 0 ? "YES" : "no") << "\n";
+      }
+      RCLCPP_INFO_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "%s", oss.str().c_str());
+    }
+
     ApplyStableTargetFilter(candidates, *pub_msg);
 
     // Truncate to max_targets (0 = publish all)
@@ -391,13 +434,38 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
     output->original_width = cv_ptr->image.cols;
     output->original_height = cv_ptr->image.rows;
 
+    cv::Mat letterbox_bgr;
+    std::vector<uint8_t> nv12_buf;
+    cv::Mat *lb_ptr = nullptr;
+    std::vector<uint8_t> *nv_ptr = nullptr;
+    if (debug_dump_input_once_ && !input_dumped_) {
+      lb_ptr = &letterbox_bgr;
+      nv_ptr = &nv12_buf;
+    }
+
     auto pyramid = LetterboxBgrToNv12Pyramid(
       cv_ptr->image,
       model_input_width_,
       model_input_height_,
       output->scale_to_original,
       output->pad_x,
-      output->pad_y);
+      output->pad_y,
+      lb_ptr,
+      nv_ptr);
+
+    if (lb_ptr && !letterbox_bgr.empty()) {
+      const std::string dump_dir = "/tmp/kt_bear_debug";
+      std::filesystem::create_directories(dump_dir);
+      cv::imwrite(dump_dir + "/original_bgr.jpg", cv_ptr->image);
+      cv::imwrite(dump_dir + "/letterbox_bgr.jpg", letterbox_bgr);
+      if (!nv12_buf.empty()) {
+        cv::Mat y_plane(model_input_height_, model_input_width_, CV_8UC1,
+          const_cast<uint8_t *>(nv12_buf.data()));
+        cv::imwrite(dump_dir + "/letterbox_y_plane.jpg", y_plane);
+      }
+      input_dumped_ = true;
+      RCLCPP_INFO(this->get_logger(), "Input dump saved to %s", dump_dir.c_str());
+    }
 
     if (!pyramid) {
       RCLCPP_ERROR(this->get_logger(), "Failed to create NV12 pyramid input");
@@ -502,6 +570,10 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
   bool publish_debug_log_{true};
   bool debug_raw_candidates_{false};
   bool debug_bbox_mapping_{false};
+  bool debug_post_nms_candidates_{false};
+  int debug_post_nms_top_k_{8};
+  bool debug_dump_input_once_{false};
+  bool input_dumped_{false};
   int max_targets_{1};
   kt_bear_detection::YoloBoxFormat box_format_{kt_bear_detection::YoloBoxFormat::kCxcywh};
   int model_input_width_{-1};

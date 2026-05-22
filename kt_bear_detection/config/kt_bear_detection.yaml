@@ -17,3 +17,6 @@ kt_bear_detection:
     debug_raw_candidates: false
     debug_bbox_mapping: false
     max_targets: 1
+    debug_post_nms_candidates: false
+    debug_post_nms_top_k: 8
+    debug_dump_input_once: false
