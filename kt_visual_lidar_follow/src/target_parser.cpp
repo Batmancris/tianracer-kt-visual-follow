@@ -25,10 +25,10 @@ VisualTarget TargetParser::parse(
   double best_area = 0.0;
 
   for (const auto &target : msg->targets) {
+    if (target.type != target_type_) {
+      continue;
+    }
     for (const auto &roi : target.rois) {
-      if (roi.type != target_type_) {
-        continue;
-      }
       if (roi.confidence < min_confidence_) {
         continue;
       }

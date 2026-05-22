@@ -3,7 +3,7 @@ kt_visual_lidar_follow_node:
     dry_run: true
 
     visual_targets_topic: "/bear_detection/targets"
-    scan_topic: "/tianracer/scan"
+    scan_topic: "/scan"
     camera_info_topic: "/tianracer/camera/camera_info"
     cmd_vel_topic: "/tianracer/cmd_vel"
 
