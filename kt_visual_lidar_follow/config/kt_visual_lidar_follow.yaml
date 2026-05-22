@@ -1,0 +1,27 @@
+kt_visual_lidar_follow_node:
+  ros__parameters:
+    dry_run: true
+
+    visual_targets_topic: "/bear_detection/targets"
+    scan_topic: "/tianracer/scan"
+    camera_info_topic: "/tianracer/camera/camera_info"
+    cmd_vel_topic: "/tianracer/cmd_vel"
+
+    desired_distance_m: 1.2
+    min_safe_distance_m: 0.6
+    max_follow_distance_m: 3.0
+
+    angle_window_deg: 8.0
+    max_target_jump_deg: 20.0
+
+    visual_timeout_ms: 500
+    lidar_timeout_ms: 300
+    lidar_hold_timeout_ms: 800
+
+    linear_kp: 0.3
+    angular_kp: 0.8
+    max_linear_debug: 0.15
+    max_angular_debug: 0.4
+
+    min_confidence: 0.5
+    target_type: "bear"
