@@ -63,7 +63,7 @@ class KtVisualLidarFollowNode : public rclcpp::Node {
 
     // Lidar associator config
     lidar_associator_.set_angle_window_deg(
-      declare_parameter<double>("angle_window_deg", 8.0));
+      get_parameter("angle_window_deg").as_double());
 
     // FSM config
     fsm_.configure(fsm_cfg);

@@ -79,5 +79,9 @@ deployment.
 ## 9. Build
 
 ```bash
-colcon build --packages-select kt_visual_lidar_follow
+colcon build \
+  --packages-select kt_visual_lidar_follow \
+  --executor sequential \
+  --parallel-workers 1 \
+  --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ```
