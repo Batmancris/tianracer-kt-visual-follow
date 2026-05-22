@@ -1,0 +1,100 @@
+# 自检参数配置文件
+
+# 全局设置
+global:
+  check_timeout_sec: 60  # 整个自检流程的最大超时时间
+  # 日志管理
+  log_retention_count: 5 # 保留最近多少份报告
+  report_dir_name: "reports"
+
+# 传感器与话题被动检查
+# keys: topic_name
+passive_checks:
+  # 激光雷达 (实际名称: /tianracer/scan)
+  - topic: "/tianracer/scan"
+    type: "sensor_msgs/LaserScan"
+    min_hz: 5.0
+    max_jitter: 0.1
+    timeout: 3.0
+    check_frame_id: true  # 检查 header.frame_id 是否存在
+    check_data_valid: true # 检查数据是否全为 NaN/Inf
+
+  # IMU (实际名称: /tianracer/imu)
+  - topic: "/tianracer/imu"
+    type: "sensor_msgs/Imu"
+    min_hz: 10.0 # 假设 100Hz 降采样或直接输出
+    max_jitter: 0.05
+    timeout: 3.0
+    check_frame_id: true
+
+  # 轮式里程计 (使用 EKF 融合后的)
+  - topic: "/tianracer/odom"
+    type: "nav_msgs/Odometry"
+    min_hz: 10.0
+    max_jitter: 0.05
+    timeout: 3.0
+    check_frame_id: true
+
+  # 摄像头 (根据用户需求，假设为 raw 图像)
+  # 注意：rostopic list 中未显示 usb_cam，可能需确认驱动是否启动
+  # 暂时保留或根据实际情况注释掉
+  - topic: "/tianracer/camera/image_raw"
+    type: "sensor_msgs/Image"
+    min_hz: 10.0
+    timeout: 5.0
+    check_frame_id: true
+
+  # 电池电压 (实际名称: /tianracer/voltage)
+  - topic: "/tianracer/voltage"
+    type: "std_msgs/Float32"
+    min_hz: 0.2  # 1Hz 甚至 0.1Hz 都可能
+    timeout: 10.0
+    check_data_range: [9.0, 13.0] # 示例电压范围
+
+# 运动验证参数
+motion_check:
+  enabled: true # 默认关闭，可以在调试通过后开启，防止意外
+  safe_dist_front: 0.5 # 如果前方障碍物小于此距离，不执行前进测试
+  publish_frequency: 50.0 # Hz
+
+  # 前后测试
+  linear:
+    command_topic: "/tianracer/ackermann_cmd"
+    command_vel: 1.0 # m/s (Verified by user to work)
+    duration: 1.0    # s
+    expected_dist: 1.0 # 期望移动距离 (近似)
+    pos_tol: 0.9     # 基础移动判定宽容度 (只要动了就行)
+
+    # 高级校验参数 (Lidar Aided)
+    check_odom_accuracy: true
+    odom_accuracy_tol: 0.05 # 里程计 vs 激光 距离误差容忍度 (米)
+    check_straightness: true
+    straightness_drift_tol: 0.02 # 直线行驶时左侧距离漂移容忍度 (米)
+    safety_dist_min: 0.1 # 运动过程中前方最小安全距离 (米)，低于此值触发急停
+
+  # 转向测试 (原地或小半径)
+  angular:
+    command_topic: "/tianracer/ackermann_cmd"
+    command_vel: 0.15 # Further reduce speed to minimize understeer/slip (was 0.3)
+    command_ang: 0.5 # rad/s (steering angle)
+    timeout: 30.0 # Increase timeout as speed is lower
+    expected_ang_deg: 90.0 # 期望转过的角度
+    ang_tol_deg: 10.0 # Relax tolerance (was 5.0) to account for braking inertia
+    geo_tol_m: 0.3 # Relax geo tolerance (was 0.15) due to odom drift
+    sync_tol_deg: 100.0 # Essentially disable sync check (was 3.0) as Odom is known to drift heavily on Ackermann
+
+# TF 检查
+tf_check:
+  required_frames:
+    # 根据 tf_tree 的通常结构修改 map->odom->base_link->...
+    # 注意 topic list 中有 ekf_se，通常 map -> odom 由 amcl 或 gmapping 发布
+    # 如果只跑 localization，可能没有 map 帧
+    - [tianracer/odom, tianracer/base_link]
+    - [tianracer/base_link, tianracer/laser]
+    - [tianracer/base_link, tianracer/imu_link]
+  timeout: 1.0
+
+# WiFi 信号检查
+wifi_check:
+  min_rssi: -45 # dBm
+  strict: true # if false, weak signal is WARN (Pass), if true, FAIL

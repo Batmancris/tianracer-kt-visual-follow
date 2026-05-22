@@ -1,0 +1,8 @@
+README.md
+setup.py
+src/robot_check/__init__.py
+src/robot_check/logger.py
+src/robot_check.egg-info/PKG-INFO
+src/robot_check.egg-info/SOURCES.txt
+src/robot_check.egg-info/dependency_links.txt
+src/robot_check.egg-info/top_level.txt

@@ -1,0 +1,20 @@
+[MASTER]
+init-hook='import sys; sys.path.append("/opt/ros/noetic/lib/python3/dist-packages")'
+ignore=CVS,.git,.svn,.hg,dist,build,venv
+
+[MESSAGES CONTROL]
+# C0111: Missing docstring
+# C0103: Naming convention (ROS uses underscores widely)
+# R0903: Too few public methods (ROS nodes often simple)
+# R0902: Too many instance attributes (GUI/ROS classes often big)
+# W1309: F-string without interpolation (Often used for consistency in logs)
+# W0703: Catching too general exception (Common in top-level loops)
+# C0411/C0412/C0413: Import ordering (Let autopep8/isort handle this, strict pylint is annoying)
+disable=C0111,C0103,R0903,R0902,W1309,W0703,C0411,C0412,C0413,W0613,W0611
+
+[TYPECHECK]
+# Handle dynamic ROS members
+generated-members=rospy.*,cv_bridge.*,cv2.*
+
+[FORMAT]
+max-line-length=120

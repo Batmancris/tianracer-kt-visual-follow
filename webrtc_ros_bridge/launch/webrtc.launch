@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="config_file" default="$(find webrtc_ros_bridge)/config/stream_config.yaml"/>
+  
+  <node name="webrtc_ros_bridge" pkg="webrtc_ros_bridge" type="bridge_node_ros1.py" output="screen">
+    <param name="config_path" value="$(arg config_file)"/>
+  </node>
+</launch>

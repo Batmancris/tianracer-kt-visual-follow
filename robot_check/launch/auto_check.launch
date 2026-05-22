@@ -1,0 +1,10 @@
+<launch>
+    <!-- 参数：测试结束后是否自动退出 -->
+    <arg name="auto_close" default="true" />
+
+    <!-- 启动测试 Runner 节点 -->
+    <!-- required="true": 只要这个节点退出，整个 launch 就会结束。这是实现“测完即停”的关键。 -->
+    <node pkg="robot_check" type="run_all_checks.py" name="robot_checker" output="screen" required="true">
+        <param name="auto_close" value="$(arg auto_close)" />
+    </node>
+</launch>

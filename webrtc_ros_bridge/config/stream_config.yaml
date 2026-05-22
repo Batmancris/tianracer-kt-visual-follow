@@ -1,0 +1,60 @@
+# Tianracer FPV配置
+server:  
+  host: "localhost"
+  port: 7777
+  protocol:  "http"
+
+# 使用正确的流ID
+streams: 
+  - name: "tianracer_fpv"
+    stream_id: "tianbot-demo"    # ✅ 这是正确的流ID
+    token: ""
+    enabled: true
+
+ros:  
+  image_topic: "/tianracer/camera/image_raw"
+  compressed_topic: "/tianracer/camera/image_raw/compressed"
+  camera_info_topic: "/tianracer/camera/camera_info"
+  audio_topic: "/tianracer/audio"
+
+media:  
+  video:  
+    enabled: true
+    encoding: "h264"
+    width: 1280
+    height:  720
+    fps: 30
+    publish_raw: true
+    publish_compressed: true
+    jpeg_quality: 85
+    
+  audio:
+    enabled: false
+    encoding: "opus"
+    sample_rate: 48000
+    channels: 1
+
+performance:
+  buffer_size:  2
+  queue_size:  5
+  thread_pool_size: 2
+  max_fps: 30
+  connection_timeout: 10
+  frame_timeout: 3
+  auto_reconnect: true
+  reconnect_interval: 5
+
+logging:  
+  level: "INFO"
+  show_fps:  true
+  fps_interval: 3.0
+
+camera_info:
+  frame_id: "tianracer_camera_optical_frame"
+  K: [800. 0, 0.0, 640.0,
+      0.0, 800.0, 360.0,
+      0.0, 0.0, 1.0]
+  D: [0.0, 0.0, 0.0, 0.0, 0.0]
+  width: 1280
+  height:  720
+  distortion_model: "plumb_bob"

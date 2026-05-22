@@ -1,0 +1,14 @@
+[Unit]
+Description=TianRacer Auto Check Service
+After=network.target roscore.service
+
+[Service]
+Type=oneshot
+User=sunrise
+# 假设 source 路径，实际部署需确认
+ExecStart=/bin/bash -c "source /home/sunrise/tianracer_ros1_ws/devel/setup.bash && roslaunch robot_check auto_check.launch"
+Restart=no
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
