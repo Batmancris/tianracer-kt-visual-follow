@@ -25,3 +25,17 @@ kt_visual_lidar_follow_node:
 
     min_confidence: 0.5
     target_type: "bear"
+
+    # Fallback camera intrinsics for dry-run theta estimation.
+    # Used when camera_info K matrix is all zeros or invalid.
+    # fallback_fx is computed from image_width and horizontal_fov unless
+    # explicitly set to a value > 1.  These values do NOT represent a real
+    # camera calibration — they are rough estimates for development only.
+    # A proper camera calibration should be loaded for production use.
+    use_fallback_intrinsics: true
+    fallback_image_width: 640
+    fallback_image_height: 480
+    fallback_horizontal_fov_deg: 70.0
+    fallback_cx: 320.0
+    fallback_cy: 240.0
+    fallback_fx: 0.0

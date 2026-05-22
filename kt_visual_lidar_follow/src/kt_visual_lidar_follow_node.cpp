@@ -33,6 +33,42 @@ class KtVisualLidarFollowNode : public rclcpp::Node {
     /* cmd_vel_topic is declared but never used as a publisher in dry-run */
     declare_parameter<std::string>("cmd_vel_topic", "/tianracer/cmd_vel");
 
+    // Fallback camera intrinsics (used when camera_info K is invalid)
+    use_fallback_intrinsics_ = declare_parameter<bool>("use_fallback_intrinsics", true);
+    auto fallback_cx_val     = declare_parameter<double>("fallback_cx", 320.0);
+    auto fallback_cy_val     = declare_parameter<double>("fallback_cy", 240.0);
+    auto fallback_fx_val     = declare_parameter<double>("fallback_fx", 0.0);
+    auto fb_width  = declare_parameter<int>("fallback_image_width", 640);
+    auto fb_hfov   = declare_parameter<double>("fallback_horizontal_fov_deg", 70.0);
+
+    if (fallback_fx_val > 1.0) {
+      fallback_fx_ = fallback_fx_val;
+    } else {
+      double hfov_rad = fb_hfov * M_PI / 180.0;
+      fallback_fx_ = static_cast<double>(fb_width) / (2.0 * std::tan(hfov_rad / 2.0));
+    }
+    fallback_cx_ = fallback_cx_val;
+    (void)fallback_cy_val;
+
+    // Apply fallback initially (camera_info may never arrive or arrive with K=0)
+    if (use_fallback_intrinsics_) {
+      fx_ = fallback_fx_;
+      cx_ = fallback_cx_;
+      intrinsics_source_ = "fallback";
+    }
+
+    RCLCPP_INFO(get_logger(),
+      "dry_run=%s", dry_run_ ? "true" : "false");
+    RCLCPP_INFO(get_logger(),
+      "use_fallback_intrinsics=%s", use_fallback_intrinsics_ ? "true" : "false");
+    RCLCPP_INFO(get_logger(),
+      "fallback_horizontal_fov_deg=%.1f", fb_hfov);
+    RCLCPP_INFO(get_logger(),
+      "fallback_fx=%.3f (from %s)", fallback_fx_,
+      fallback_fx_val > 1.0 ? "config" : "computed");
+    RCLCPP_INFO(get_logger(),
+      "fallback_cx=%.1f", fallback_cx_);
+
     auto state_topic   = declare_parameter<std::string>(
       "state_topic", "/kt_follow/state");
     auto dbg_target_topic = declare_parameter<std::string>(
@@ -87,7 +123,7 @@ class KtVisualLidarFollowNode : public rclcpp::Node {
       std::bind(&KtVisualLidarFollowNode::on_camera_info, this, std::placeholders::_1));
 
     RCLCPP_INFO(get_logger(),
-      "kt_visual_lidar_follow_node started (dry_run=%s)", dry_run_ ? "true" : "false");
+      "kt_visual_lidar_follow_node started");
     RCLCPP_INFO(get_logger(),
       "  visual_targets_topic: %s", visual_topic.c_str());
     RCLCPP_INFO(get_logger(),
@@ -98,11 +134,22 @@ class KtVisualLidarFollowNode : public rclcpp::Node {
 
  private:
   void on_camera_info(const sensor_msgs::msg::CameraInfo::ConstSharedPtr &msg) {
-    fx_ = msg->k[0];
-    cx_ = msg->k[2];
     has_camera_info_ = true;
     last_cam_info_stamp_ = static_cast<double>(msg->header.stamp.sec) +
                            static_cast<double>(msg->header.stamp.nanosec) * 1e-9;
+
+    if (msg->k[0] > 1.0 && msg->k[2] > 1.0) {
+      fx_ = msg->k[0];
+      cx_ = msg->k[2];
+      intrinsics_source_ = "camera_info";
+    } else if (use_fallback_intrinsics_) {
+      fx_ = fallback_fx_;
+      cx_ = fallback_cx_;
+      intrinsics_source_ = "fallback";
+      warn_invalid_intrinsics();
+    } else {
+      intrinsics_source_ = "invalid";
+    }
   }
 
   void on_visual(const ai_msgs::msg::PerceptionTargets::ConstSharedPtr &msg) {
@@ -120,9 +167,11 @@ class KtVisualLidarFollowNode : public rclcpp::Node {
   void run_fsm() {
     const double current_time = now().seconds();
 
-    // Compute theta from visual target if we have camera info
+    // Compute theta from visual target if we have valid intrinsics
     double theta_rad = 0.0;
-    bool visual_valid = latest_visual_.valid && has_camera_info_;
+    bool have_valid_intrinsics = (intrinsics_source_ == "camera_info" ||
+                                  intrinsics_source_ == "fallback");
+    bool visual_valid = latest_visual_.valid && have_valid_intrinsics;
 
     if (visual_valid && fx_ > 0.0) {
       theta_rad = std::atan2(latest_visual_.center_x - cx_, fx_);
@@ -184,7 +233,10 @@ class KtVisualLidarFollowNode : public rclcpp::Node {
             << " w=" << latest_visual_.width
             << " h=" << latest_visual_.height
             << " conf=" << latest_visual_.confidence
-            << " theta=" << theta_rad;
+            << " theta=" << theta_rad
+            << " fx=" << fx_
+            << " cx0=" << cx_
+            << " intrinsics=" << intrinsics_source_;
       } else {
         oss << "no_target";
       }
@@ -206,11 +258,25 @@ class KtVisualLidarFollowNode : public rclcpp::Node {
     }
   }
 
+  void warn_invalid_intrinsics() {
+    auto t = now().seconds();
+    if (t - last_invalid_intrinsics_warn_sec_ >= 5.0) {
+      RCLCPP_WARN(get_logger(),
+        "camera_info intrinsics invalid, using fallback intrinsics");
+      last_invalid_intrinsics_warn_sec_ = t;
+    }
+  }
+
   // State
   bool dry_run_ = true;
   bool has_camera_info_ = false;
   double fx_ = 0.0;
   double cx_ = 0.0;
+  double fallback_fx_ = 0.0;
+  double fallback_cx_ = 320.0;
+  bool use_fallback_intrinsics_ = true;
+  std::string intrinsics_source_ = "none";
+  double last_invalid_intrinsics_warn_sec_ = 0.0;
   double last_cam_info_stamp_ = 0.0;
   double last_visual_stamp_ = 0.0;
   double last_scan_stamp_ = 0.0;

@@ -24,7 +24,7 @@ All topic names are configurable via parameters.
 | Topic | Type | Description |
 |---|---|---|
 | `/kt_follow/state` | `std_msgs/msg/String` | Current FSM state + optional stop reason |
-| `/kt_follow/debug_target` | `std_msgs/msg/String` | Parsed target info (cx, cy, theta, distance) |
+| `/kt_follow/debug_target` | `std_msgs/msg/String` | Parsed target info (cx, cy, theta, fx, cx0, intrinsics, distance) |
 | `/kt_follow/debug_cmd` | `geometry_msgs/msg/TwistStamped` | Suggested velocity (NOT connected to chassis) |
 
 ## 4. Dry-Run Safety Design
@@ -69,14 +69,43 @@ When `kt_bear_detection` is ready:
    ROI type matching `target_type` parameter (default: `"bear"`).
 3. Set `dry_run:=false` after thorough testing.
 
-## 8. cmd_vel_to_ackermann_drive.py 0.5 m/s Clamp Risk
+## 8. Fallback Camera Intrinsics
+
+When `/tianracer/camera/camera_info` publishes an invalid K matrix (all zeros
+or fx/cx <= 1), the node cannot compute theta from pixel coordinates. To keep
+dry-run usable, **fallback intrinsics** are enabled by default:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `use_fallback_intrinsics` | `true` | Enable fallback when camera_info is invalid |
+| `fallback_image_width` | `640` | Assumed image width (pixels) |
+| `fallback_horizontal_fov_deg` | `70.0` | Assumed horizontal FOV (degrees) |
+| `fallback_cx` | `320.0` | Assumed principal point x |
+| `fallback_fx` | `0.0` | If > 1, used directly; otherwise computed from width + FOV |
+
+**Fallback fx formula:**
+```
+fx = image_width / (2 * tan(horizontal_fov_deg / 2))
+```
+For 640px / 70°: fx ≈ 457.1
+
+**Intrinsics source priority:**
+1. `camera_info` — if K[0] > 1 and K[2] > 1
+2. `fallback` — if camera_info invalid and `use_fallback_intrinsics=true`
+3. `invalid` — theta is not computed, FSM enters STOP with reason `invalid_intrinsics`
+
+**Important:** Fallback values are rough estimates for development only. A proper
+camera calibration (e.g., from `camera_calibration` package) should be loaded
+for production deployment.
+
+## 9. cmd_vel_to_ackermann_drive.py 0.5 m/s Clamp Risk
 
 Before running on real hardware, the `cmd_vel_to_ackermann_drive.py` node
 clamps `linear.x` to 0.5 m/s. If the follow node suggests higher speeds,
 they will be silently clamped. This must be addressed before real-vehicle
 deployment.
 
-## 9. Build
+## 10. Build
 
 ```bash
 colcon build \
