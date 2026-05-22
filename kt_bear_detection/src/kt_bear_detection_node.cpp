@@ -8,7 +8,7 @@
 
 #include "ai_msgs/msg/perception_targets.hpp"
 #include "ament_index_cpp/get_package_prefix.hpp"
-#include "cv_bridge/cv_bridge.hpp"
+#include "cv_bridge/cv_bridge.h"
 #include "dnn_node/dnn_node.h"
 #include "dnn_node/util/image_proc.h"
 #include "hobot_cv/hobotcv_imgproc.h"
