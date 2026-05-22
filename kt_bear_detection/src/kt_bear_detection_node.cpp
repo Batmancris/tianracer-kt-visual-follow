@@ -175,6 +175,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
     log_detections_ = this->declare_parameter<bool>("log_detections", false);
     publish_debug_log_ = this->declare_parameter<bool>("publish_debug_log", true);
     debug_raw_candidates_ = this->declare_parameter<bool>("debug_raw_candidates", false);
+    max_targets_ = this->declare_parameter<int>("max_targets", 1);
 
     if (Init() != 0 || GetModelInputSize(0, model_input_width_, model_input_height_) < 0) {
       RCLCPP_ERROR(this->get_logger(), "Failed to initialize kt_bear_detection");
@@ -292,6 +293,19 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
     }
 
     ApplyStableTargetFilter(candidates, *pub_msg);
+
+    // Truncate to max_targets (0 = publish all)
+    if (max_targets_ > 0 && pub_msg->targets.size() > static_cast<std::size_t>(max_targets_)) {
+      std::sort(
+        pub_msg->targets.begin(),
+        pub_msg->targets.end(),
+        [](const ai_msgs::msg::Target &a, const ai_msgs::msg::Target &b) {
+          const double conf_a = a.rois.empty() ? 0.0 : a.rois.front().confidence;
+          const double conf_b = b.rois.empty() ? 0.0 : b.rois.front().confidence;
+          return conf_a > conf_b;
+        });
+      pub_msg->targets.resize(static_cast<std::size_t>(max_targets_));
+    }
 
     if (publish_debug_log_ && !pub_msg->targets.empty() && !pub_msg->targets.front().rois.empty()) {
       const auto &rect = pub_msg->targets.front().rois.front().rect;
@@ -453,6 +467,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
   bool log_detections_{false};
   bool publish_debug_log_{true};
   bool debug_raw_candidates_{false};
+  int max_targets_{1};
   kt_bear_detection::YoloBoxFormat box_format_{kt_bear_detection::YoloBoxFormat::kCxcywh};
   int model_input_width_{-1};
   int model_input_height_{-1};

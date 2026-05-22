@@ -15,3 +15,4 @@ kt_bear_detection:
     log_detections: false
     publish_debug_log: true
     debug_raw_candidates: false
+    max_targets: 1
