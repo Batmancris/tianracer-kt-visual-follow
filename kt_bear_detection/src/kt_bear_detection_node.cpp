@@ -197,6 +197,18 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
 
     auto pub_qos = rclcpp::SensorDataQoS().keep_last(1);
     publisher_ = this->create_publisher<ai_msgs::msg::PerceptionTargets>(output_topic_, pub_qos);
+
+    param_callback_ = this->add_on_set_parameters_callback(
+      [this](const std::vector<rclcpp::Parameter> &params) {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        for (const auto &p : params) {
+          if (p.get_name() == "debug_bbox_mapping") {
+            debug_bbox_mapping_ = p.as_bool();
+          }
+        }
+        return result;
+      });
   }
 
  protected:
@@ -496,6 +508,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
   int model_input_height_{-1};
   rclcpp::Subscription<sensor_msgs::msg::Image>::ConstSharedPtr image_subscription_;
   rclcpp::Publisher<ai_msgs::msg::PerceptionTargets>::SharedPtr publisher_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_;
   std::mutex stable_tracks_mutex_;
   std::vector<StableTrack> stable_tracks_;
 };
