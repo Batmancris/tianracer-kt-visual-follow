@@ -14,3 +14,4 @@ kt_bear_detection:
     log_fps: false
     log_detections: false
     publish_debug_log: true
+    debug_raw_candidates: false

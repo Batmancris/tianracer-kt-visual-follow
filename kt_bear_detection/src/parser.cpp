@@ -293,7 +293,7 @@ int32_t ParseSingleOutput(
       continue;
     }
 
-    if (debug_candidates_left > 0) {
+    if (config.debug_raw_candidates && debug_candidates_left > 0) {
       std::fprintf(
         stderr,
         "[kt_bear_detection_parser] raw candidate anchor=%d score=%.4f raw0=%.4f raw1=%.4f raw2=%.4f raw3=%.4f format=%s -> x1=%.1f y1=%.1f x2=%.1f y2=%.1f\n",

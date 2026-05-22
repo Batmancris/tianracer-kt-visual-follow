@@ -34,6 +34,7 @@ struct YoloV8ParserConfig {
   int input_width;
   int input_height;
   YoloBoxFormat box_format = YoloBoxFormat::kXyxy;
+  bool debug_raw_candidates = false;
 };
 
 struct DebugAnchorInfo {

@@ -174,6 +174,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
     log_fps_ = this->declare_parameter<bool>("log_fps", false);
     log_detections_ = this->declare_parameter<bool>("log_detections", false);
     publish_debug_log_ = this->declare_parameter<bool>("publish_debug_log", true);
+    debug_raw_candidates_ = this->declare_parameter<bool>("debug_raw_candidates", false);
 
     if (Init() != 0 || GetModelInputSize(0, model_input_width_, model_input_height_) < 0) {
       RCLCPP_ERROR(this->get_logger(), "Failed to initialize kt_bear_detection");
@@ -233,6 +234,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
       model_input_width_,
       model_input_height_,
       box_format_,
+      debug_raw_candidates_,
     };
 
     if (kt_bear_detection::ParseDetections(node_output, parser_config, detections) != 0) {
@@ -450,6 +452,7 @@ class KtBearDetectionNode : public hobot::dnn_node::DnnNode {
   bool log_fps_{false};
   bool log_detections_{false};
   bool publish_debug_log_{true};
+  bool debug_raw_candidates_{false};
   kt_bear_detection::YoloBoxFormat box_format_{kt_bear_detection::YoloBoxFormat::kCxcywh};
   int model_input_width_{-1};
   int model_input_height_{-1};
