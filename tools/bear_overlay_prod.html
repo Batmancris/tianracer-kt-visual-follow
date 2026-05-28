@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KT Demo Overlay</title>
+  <style>
+    :root {
+      --bg: #06131c;
+      --panel: #102733;
+      --panel-2: #173847;
+      --ink: #ecf4f1;
+      --muted: #9ec0bb;
+      --line: #2d5663;
+      --green: #91d36b;
+      --amber: #e6bc54;
+      --red: #d56060;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at top, #173847 0%, var(--bg) 55%);
+      color: var(--ink);
+    }
+    .bar, .mode-bar, .status-bar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(8, 20, 28, 0.9);
+      flex-wrap: wrap;
+    }
+    .bar input, .bar button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--panel);
+      color: var(--ink);
+    }
+    .bar button, .mode-bar button {
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .mode-bar button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 18px;
+      background: var(--panel-2);
+      color: var(--ink);
+    }
+    .mode-bar button.active.follow { background: var(--green); color: #12200a; }
+    .mode-bar button.active.manual { background: var(--amber); color: #241a02; }
+    .mode-bar button.active.off { background: var(--red); color: #2a0909; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 16px;
+      padding: 16px;
+    }
+    .video-shell {
+      position: relative;
+      background: #000;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      min-height: 520px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #rosImage, #overlay {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--muted);
+      background: linear-gradient(180deg, rgba(16, 39, 51, 0.3), rgba(0, 0, 0, 0.7));
+      padding: 24px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      background: rgba(16, 39, 51, 0.85);
+    }
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 8px;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .label { color: var(--muted); }
+    .status-bar {
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+    }
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; }
+      .video-shell { min-height: 360px; }
+    }
+  </style>
+  <script src="./roslib.min.js"></script>
+</head>
+<body>
+  <div class="bar">
+    <label>Rosbridge <input id="ros-url" value="ws://10.129.90.241:9090" style="width:220px"></label>
+    <label>Image Topic <input id="image-topic" value="/tianracer/camera/image_compressed" style="width:280px"></label>
+    <label>Target Topic <input id="target-topic" value="/bear_detection/targets" style="width:240px"></label>
+    <button id="connect-btn">Connect</button>
+    <button id="disconnect-btn">Disconnect</button>
+  </div>
+
+  <div class="mode-bar">
+    <strong>Follow Mode</strong>
+    <button class="mode-btn follow" data-mode="FOLLOW">FOLLOW</button>
+    <button class="mode-btn manual" data-mode="MANUAL">MANUAL</button>
+    <button class="mode-btn off active" data-mode="OFF">OFF</button>
+    <span id="mode-state">mode=OFF</span>
+  </div>
+
+  <div class="layout">
+    <div class="video-shell">
+      <img id="rosImage" alt="ROS compressed image">
+      <canvas id="overlay"></canvas>
+      <div class="placeholder" id="placeholder">
+        正式页面只负责可视化和 `/kt_follow/mode` 发布。<br>
+        控制闭环固定走 `/bear_detection/targets` + `/tianracer/scan` + `kt_follow_controller_v4.py`。
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Demo Status</h2>
+      <div class="kv"><span class="label">rosbridge</span><span id="ros-status">idle</span></div>
+      <div class="kv"><span class="label">image fps</span><span id="image-fps">0</span></div>
+      <div class="kv"><span class="label">target fps</span><span id="target-fps">0</span></div>
+      <div class="kv"><span class="label">target count</span><span id="target-count">0</span></div>
+      <div class="kv"><span class="label">last bbox</span><span id="bbox-status">-</span></div>
+      <p style="font-size:13px; color: var(--muted); margin-top: 16px;">
+        本页面不提供底盘直控，不直接发布底盘控制指令，也不包含任何 legacy 视频通路。
+      </p>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span>Image: <strong>/tianracer/camera/image_compressed</strong></span>
+    <span>Targets: <strong>/bear_detection/targets</strong></span>
+    <span>Mode Topic: <strong>/kt_follow/mode</strong></span>
+  </div>
+
+  <script>
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const rosImage = document.getElementById('rosImage');
+    const placeholder = document.getElementById('placeholder');
+    const rosStatus = document.getElementById('ros-status');
+    const imageFps = document.getElementById('image-fps');
+    const targetFps = document.getElementById('target-fps');
+    const targetCount = document.getElementById('target-count');
+    const bboxStatus = document.getElementById('bbox-status');
+    const modeState = document.getElementById('mode-state');
+
+    let ros = null;
+    let modeTopic = null;
+    let imageTopic = null;
+    let targetTopic = null;
+    let lastTargets = [];
+    let imageFrames = 0;
+    let targetFrames = 0;
+
+    function resizeOverlay() {
+      const rect = rosImage.getBoundingClientRect();
+      overlay.width = rect.width || 640;
+      overlay.height = rect.height || 480;
+      overlay.style.width = `${overlay.width}px`;
+      overlay.style.height = `${overlay.height}px`;
+    }
+
+    function drawTargets() {
+      resizeOverlay();
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      ctx.lineWidth = 3;
+      ctx.font = '16px Segoe UI';
+      ctx.strokeStyle = '#91d36b';
+      ctx.fillStyle = '#91d36b';
+
+      if (!lastTargets.length) {
+        bboxStatus.textContent = '-';
+        return;
+      }
+
+      const srcWidth = 640;
+      const srcHeight = 480;
+      const scale = Math.min(overlay.width / srcWidth, overlay.height / srcHeight);
+      const drawWidth = srcWidth * scale;
+      const drawHeight = srcHeight * scale;
+      const offsetX = (overlay.width - drawWidth) / 2;
+      const offsetY = (overlay.height - drawHeight) / 2;
+
+      lastTargets.forEach((target) => {
+        const roi = target.rois && target.rois[0];
+        if (!roi) return;
+        const x = offsetX + roi.rect.x_offset * scale;
+        const y = offsetY + roi.rect.y_offset * scale;
+        const w = roi.rect.width * scale;
+        const h = roi.rect.height * scale;
+        ctx.strokeRect(x, y, w, h);
+        ctx.fillText(`${target.type} ${(roi.confidence || 0).toFixed(2)}`, x, Math.max(18, y - 6));
+        bboxStatus.textContent = `${target.type} x=${roi.rect.x_offset} y=${roi.rect.y_offset} w=${roi.rect.width} h=${roi.rect.height}`;
+      });
+    }
+
+    function updateModeButtons(mode) {
+      document.querySelectorAll('.mode-btn').forEach((button) => {
+        button.classList.toggle('active', button.dataset.mode === mode);
+      });
+      modeState.textContent = `mode=${mode}`;
+    }
+
+    function connect() {
+      if (typeof ROSLIB === 'undefined') {
+        rosStatus.textContent = 'roslib missing';
+        return;
+      }
+
+      const rosUrl = document.getElementById('ros-url').value.trim();
+      const imageTopicName = document.getElementById('image-topic').value.trim();
+      const targetTopicName = document.getElementById('target-topic').value.trim();
+
+      disconnect();
+      ros = new ROSLIB.Ros({ url: rosUrl });
+      rosStatus.textContent = 'connecting';
+
+      ros.on('connection', () => {
+        rosStatus.textContent = 'connected';
+        placeholder.style.display = 'none';
+
+        modeTopic = new ROSLIB.Topic({
+          ros,
+          name: '/kt_follow/mode',
+          messageType: 'std_msgs/msg/String',
+        });
+        imageTopic = new ROSLIB.Topic({
+          ros,
+          name: imageTopicName,
+          messageType: 'sensor_msgs/msg/CompressedImage',
+        });
+        targetTopic = new ROSLIB.Topic({
+          ros,
+          name: targetTopicName,
+          messageType: 'ai_msgs/msg/PerceptionTargets',
+        });
+
+        imageTopic.subscribe((msg) => {
+          imageFrames += 1;
+          const payload = typeof msg.data === 'string' ? msg.data : '';
+          rosImage.src = `data:image/jpeg;base64,${payload}`;
+        });
+
+        targetTopic.subscribe((msg) => {
+          targetFrames += 1;
+          lastTargets = (msg.targets || []).filter((target) => target.type === 'bear');
+          targetCount.textContent = String(lastTargets.length);
+          drawTargets();
+        });
+      });
+
+      ros.on('error', () => {
+        rosStatus.textContent = 'error';
+      });
+
+      ros.on('close', () => {
+        rosStatus.textContent = 'closed';
+      });
+    }
+
+    function disconnect() {
+      if (imageTopic) imageTopic.unsubscribe();
+      if (targetTopic) targetTopic.unsubscribe();
+      if (ros) ros.close();
+      ros = null;
+      modeTopic = null;
+      imageTopic = null;
+      targetTopic = null;
+      rosStatus.textContent = 'idle';
+      rosImage.removeAttribute('src');
+      placeholder.style.display = 'flex';
+      lastTargets = [];
+      targetCount.textContent = '0';
+      drawTargets();
+    }
+
+    function publishMode(mode) {
+      updateModeButtons(mode);
+      if (!modeTopic) return;
+      modeTopic.publish(new ROSLIB.Message({ data: mode }));
+    }
+
+    setInterval(() => {
+      imageFps.textContent = String(imageFrames);
+      targetFps.textContent = String(targetFrames);
+      imageFrames = 0;
+      targetFrames = 0;
+    }, 1000);
+
+    document.getElementById('connect-btn').addEventListener('click', connect);
+    document.getElementById('disconnect-btn').addEventListener('click', disconnect);
+    document.querySelectorAll('.mode-btn').forEach((button) => {
+      button.addEventListener('click', () => publishMode(button.dataset.mode));
+    });
+    rosImage.addEventListener('load', drawTargets);
+    window.addEventListener('resize', drawTargets);
+  </script>
+</body>
+</html>

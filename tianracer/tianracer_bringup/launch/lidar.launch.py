@@ -46,6 +46,15 @@ def generate_launch_description():
                                   'serial_port': serial_port
                                   }.items(),
             ))
+    elif "LDS_E110" in lidar:
+        ld.add_action(IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(
+                get_package_share_directory("tianracer_bringup"),
+                'launch','includes','lidar', 'lds_e110.launch.py')),
+                launch_arguments={'namespace': namespace,
+                                  'serial_port': serial_port
+                                  }.items(),
+            ))
     elif "osight" in lidar:
         ld.add_action(IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(

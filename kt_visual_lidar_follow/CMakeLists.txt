@@ -44,6 +44,12 @@ install(TARGETS kt_visual_lidar_follow_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/kt_smooth_follow_controller_v3.py
+  scripts/kt_follow_controller_v4.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
 )
