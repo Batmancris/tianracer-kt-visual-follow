@@ -47,6 +47,7 @@ install(TARGETS kt_visual_lidar_follow_node
 install(PROGRAMS
   scripts/kt_smooth_follow_controller_v3.py
   scripts/kt_follow_controller_v4.py
+  scripts/kt_camera_control_bridge.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

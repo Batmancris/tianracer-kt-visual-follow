@@ -11,6 +11,7 @@ Legacy debug-string inputs are intentionally not used here.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import signal
 import sys
@@ -347,7 +348,9 @@ class FollowControllerV4(Node):
         )
 
         self.cmd_pub = self.create_publisher(AckermannDrive, "/ackermann_cmd", qos_reliable)
+        self.tuning_status_pub = self.create_publisher(String, "/kt_follow/tuning_status", qos_reliable)
         self.create_subscription(String, "/kt_follow/mode", self._on_mode, qos_reliable)
+        self.create_subscription(String, "/kt_follow/tuning", self._on_tuning, qos_reliable)
         self.create_subscription(PerceptionTargets, "/bear_detection/targets", self._on_targets, make_sensor_data_qos())
         self.create_subscription(LaserScan, "/tianracer/scan", self._on_scan, make_sensor_data_qos())
 
@@ -403,6 +406,54 @@ class FollowControllerV4(Node):
         )
         self.current_dist_raw = result.distance
         self.current_valid_scan_pts = result.valid_scan_pts
+
+    def _publish_tuning_status(self, ok: bool, message: str) -> None:
+        payload = {
+            "ok": ok,
+            "max_speed": round(self.config.max_speed, 3),
+            "max_steering_angle": round(self.config.max_steering_angle, 3),
+            "message": message,
+        }
+        self.tuning_status_pub.publish(String(data=json.dumps(payload, ensure_ascii=True)))
+
+    def _on_tuning(self, msg: String) -> None:
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError:
+            self.get_logger().warn("ignoring invalid tuning json")
+            self._publish_tuning_status(False, "invalid json")
+            return
+
+        if not isinstance(payload, dict):
+            self.get_logger().warn("ignoring tuning payload that is not an object")
+            self._publish_tuning_status(False, "invalid payload")
+            return
+
+        updated = False
+        for field_name, low, high in (
+            ("max_speed", 0.0, 0.6),
+            ("max_steering_angle", 0.0, 0.45),
+        ):
+            if field_name not in payload:
+                continue
+            try:
+                value = float(payload[field_name])
+            except (TypeError, ValueError):
+                self.get_logger().warn("ignoring invalid tuning value for %s" % field_name)
+                self._publish_tuning_status(False, "invalid %s" % field_name)
+                return
+            setattr(self.config, field_name, clamp(value, low, high))
+            updated = True
+
+        if not updated:
+            self._publish_tuning_status(False, "no supported fields")
+            return
+
+        self.get_logger().info(
+            "tuning updated: max_speed=%.2f max_steering_angle=%.2f"
+            % (self.config.max_speed, self.config.max_steering_angle)
+        )
+        self._publish_tuning_status(True, "updated")
 
     def _publish_stop(self, count: int) -> None:
         cmd = AckermannDrive()

@@ -11,8 +11,14 @@ echo '--- tmux ---' &&
 tmux ls 2>/dev/null || true &&
 echo '--- nodes ---' &&
 ros2 node list || true &&
+echo '--- camera_ctrl tmux ---' &&
+tmux has-session -t camera_ctrl 2>/dev/null && echo 'camera_ctrl: running' || echo 'camera_ctrl: missing' &&
 echo '--- ackermann ---' &&
 ros2 topic info /ackermann_cmd -v || true &&
+echo '--- camera control ---' &&
+ros2 topic info /kt_camera/control -v || true &&
+echo '--- camera status ---' &&
+ros2 topic info /kt_camera/status -v || true &&
 echo '--- scan ---' &&
 ros2 topic info /tianracer/scan -v || true &&
 timeout 7 stdbuf -oL ros2 topic hz /tianracer/scan 2>/dev/null || true &&

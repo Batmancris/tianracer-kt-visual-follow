@@ -46,6 +46,7 @@ tmux kill-session -t follow_v4 2>/dev/null || true;
 tmux kill-session -t smooth_follow 2>/dev/null || true;
 tmux kill-session -t kt_vlf 2>/dev/null || true;
 tmux kill-session -t rosbridge 2>/dev/null || true;
+tmux kill-session -t camera_ctrl 2>/dev/null || true;
 tmux kill-session -t usb_cam 2>/dev/null || true;
 tmux kill-session -t bear_det 2>/dev/null || true;
 tmux kill-session -t ros2_lidar 2>/dev/null || true;
@@ -57,6 +58,8 @@ pkill -TERM -f 'python3 .*kt_follow_controller_v4.py' 2>/dev/null || true;
 sleep 0.2;
 pkill -KILL -f 'kt_follow_controller_v4.py' 2>/dev/null || true;
 pkill -KILL -f 'python3 .*kt_follow_controller_v4.py' 2>/dev/null || true;
+pkill -TERM -f 'python3 .*kt_camera_control_bridge.py' 2>/dev/null || true;
+pkill -KILL -f 'python3 .*kt_camera_control_bridge.py' 2>/dev/null || true;
 pkill -f kt_smooth_follow_controller 2>/dev/null || true;
 pkill -f kt_visual_lidar_follow_node 2>/dev/null || true;
 echo '--- remaining tmux ---'
