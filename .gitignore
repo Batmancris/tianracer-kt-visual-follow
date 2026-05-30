@@ -38,3 +38,21 @@ ssh_audit*.py
 
 # Nested git repos (flattened)
 **/.git/
+
+# Test artifacts
+reports/artifacts/
+
+# Temp dir
+.tmp/
+
+# Capture / debug text
+rc_*_capture.txt
+*_capture.txt
+
+# Legacy scripts at root (should be in scripts/)
+kt_smooth_follow_controller.py
+kt_smooth_follow_controller_v3.py
+kt_vlf_*.py
+
+# Empty placeholder
+ssh
