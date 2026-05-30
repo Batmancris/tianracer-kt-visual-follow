@@ -41,7 +41,8 @@ KT tianracer 小熊检测包。订阅标准 `sensor_msgs/Image`，发布 `ai_msg
 
 ## 后续验证
 
-通过 `bear_overlay.html` 页面订阅 `/bear_detection/targets`，在浏览器中观察检测框是否正确叠加在摄像头画面上。
+正式演示路径使用 `bear_overlay_prod.html` 订阅 `/bear_detection/targets` 和 `/tianracer/camera/image_compressed`，
+在浏览器中观察检测框是否正确叠加。`bear_overlay.html` 仅保留为历史调试页面。
 
 ## 板端构建
 

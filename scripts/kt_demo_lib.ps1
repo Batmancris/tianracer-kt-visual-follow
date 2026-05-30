@@ -27,3 +27,43 @@ $RemoteBody
     $script = $preamble -replace "`r`n", "`n"
     return $script | ssh "$RobotUser@$RobotIp" "tr -d '\r' | bash -s"
 }
+
+function Get-KtReadySummary {
+    param(
+        [string[]]$Lines
+    )
+
+    $markers = @{}
+    $blockers = New-Object System.Collections.Generic.List[string]
+
+    foreach ($line in $Lines) {
+        if ($null -eq $line) {
+            continue
+        }
+
+        $text = $line.ToString().Trim()
+        if ($text -match '^READY_CHECK\s+([A-Z0-9_]+)=(.*)$') {
+            $markers[$matches[1]] = $matches[2].Trim()
+            continue
+        }
+
+        if ($text -match '^READY_BLOCKER:\s*(.+)$') {
+            [void]$blockers.Add($matches[1].Trim())
+            continue
+        }
+
+        if ($text -match '^READY_TO_FOLLOW:\s*(YES|NO)$') {
+            $markers["READY_TO_FOLLOW"] = $matches[1]
+        }
+    }
+
+    if (-not $markers.ContainsKey("READY_TO_FOLLOW")) {
+        [void]$blockers.Add("missing READY_TO_FOLLOW marker")
+    }
+
+    [pscustomobject]@{
+        Ready = $markers.ContainsKey("READY_TO_FOLLOW") -and $markers["READY_TO_FOLLOW"] -eq "YES"
+        Markers = $markers
+        Blockers = @($blockers)
+    }
+}

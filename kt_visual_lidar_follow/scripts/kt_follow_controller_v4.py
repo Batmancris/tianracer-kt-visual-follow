@@ -61,6 +61,7 @@ def rate_limit(current: float, target: float, rise_limit: float, fall_limit: flo
 @dataclass
 class ControllerConfig:
     enable_control: bool = False
+    scan_topic: str = "/tianracer/scan"
     image_width: float = 640.0
     image_center_x: float = 320.0
     horizontal_fov_deg: float = 70.0
@@ -119,6 +120,12 @@ class FollowDecision:
     steer_cmd: float
     reason: str
     publishing: bool
+
+
+@dataclass
+class StatusSnapshot:
+    reason: str = "mode=OFF"
+    publishing: bool = False
 
 
 def percentile(sorted_values: Sequence[float], q: float) -> float:
@@ -187,6 +194,33 @@ def compute_theta_raw(roi_cx: float, image_width: float, horizontal_fov_deg: flo
     return math.atan2(roi_cx - center_x, fx)
 
 
+def compute_image_theta_limits(image_width: float, horizontal_fov_deg: float) -> Tuple[float, float]:
+    return (
+        compute_theta_raw(0.0, image_width, horizontal_fov_deg),
+        compute_theta_raw(image_width, image_width, horizontal_fov_deg),
+    )
+
+
+def collect_scan_samples(
+    scan: ScanWindow,
+    theta_raw: float,
+    half_window_rad: float,
+    range_min: float,
+    range_max: float,
+) -> List[float]:
+    samples: List[float] = []
+    for idx, value in enumerate(scan.ranges):
+        angle = scan.angle_min + idx * scan.angle_increment
+        if abs(angle - theta_raw) > half_window_rad:
+            continue
+        if not math.isfinite(value):
+            continue
+        if value < range_min or value > range_max:
+            continue
+        samples.append(float(value))
+    return samples
+
+
 def extract_scan_distance(
     scan: ScanWindow,
     theta_raw: float,
@@ -195,16 +229,10 @@ def extract_scan_distance(
     range_max: float,
 ) -> ScanDistanceResult:
     half_window = math.radians(angle_window_deg)
-    samples: List[float] = []
-    for idx, value in enumerate(scan.ranges):
-        angle = scan.angle_min + idx * scan.angle_increment
-        if abs(angle - theta_raw) > half_window:
-            continue
-        if not math.isfinite(value):
-            continue
-        if value < range_min or value > range_max:
-            continue
-        samples.append(float(value))
+    samples = collect_scan_samples(scan, theta_raw, half_window, range_min, range_max)
+    if not samples:
+        fallback_half_window = math.radians(max(angle_window_deg * 2.5, angle_window_deg + 6.0))
+        samples = collect_scan_samples(scan, theta_raw, fallback_half_window, range_min, range_max)
 
     if not samples:
         return ScanDistanceResult(distance=None, valid_scan_pts=0, samples=[])
@@ -340,6 +368,11 @@ class FollowControllerV4(Node):
         self.current_valid_scan_pts: int = 0
         self.last_target_time = 0.0
         self.last_scan_time = 0.0
+        self.last_scan_angle_min: Optional[float] = None
+        self.last_scan_angle_max: Optional[float] = None
+        self.last_scan_angle_increment: Optional[float] = None
+        self.last_scan_count: int = 0
+        self.status_snapshot = StatusSnapshot()
 
         qos_reliable = QoSProfile(
             depth=5,
@@ -349,20 +382,27 @@ class FollowControllerV4(Node):
 
         self.cmd_pub = self.create_publisher(AckermannDrive, "/ackermann_cmd", qos_reliable)
         self.tuning_status_pub = self.create_publisher(String, "/kt_follow/tuning_status", qos_reliable)
+        self.status_pub = self.create_publisher(String, "/kt_follow/status", qos_reliable)
         self.create_subscription(String, "/kt_follow/mode", self._on_mode, qos_reliable)
         self.create_subscription(String, "/kt_follow/tuning", self._on_tuning, qos_reliable)
         self.create_subscription(PerceptionTargets, "/bear_detection/targets", self._on_targets, make_sensor_data_qos())
-        self.create_subscription(LaserScan, "/tianracer/scan", self._on_scan, make_sensor_data_qos())
+        self.create_subscription(LaserScan, self.config.scan_topic, self._on_scan, make_sensor_data_qos())
 
         self.loop_dt = 1.0 / self.config.loop_hz
         self.timer = self.create_timer(self.loop_dt, self._control_loop)
+        self.status_timer = self.create_timer(0.2, self._publish_status)
 
         signal.signal(signal.SIGINT, self._sig_handler)
         signal.signal(signal.SIGTERM, self._sig_handler)
 
         self.get_logger().info(
-            "kt_follow_controller_v4 started enable_control=%s max_speed=%.2f max_steering_angle=%.2f"
-            % (self.config.enable_control, self.config.max_speed, self.config.max_steering_angle)
+            "kt_follow_controller_v4 started enable_control=%s scan_topic=%s max_speed=%.2f max_steering_angle=%.2f"
+            % (
+                self.config.enable_control,
+                self.config.scan_topic,
+                self.config.max_speed,
+                self.config.max_steering_angle,
+            )
         )
 
     def _on_mode(self, msg: String) -> None:
@@ -392,6 +432,10 @@ class FollowControllerV4(Node):
 
     def _on_scan(self, msg: LaserScan) -> None:
         self.last_scan_time = time.time()
+        self.last_scan_angle_min = float(msg.angle_min)
+        self.last_scan_angle_max = float(msg.angle_max)
+        self.last_scan_angle_increment = float(msg.angle_increment)
+        self.last_scan_count = len(msg.ranges)
         if self.current_theta_raw is None:
             self.current_dist_raw = None
             self.current_valid_scan_pts = 0
@@ -412,6 +456,8 @@ class FollowControllerV4(Node):
             "ok": ok,
             "max_speed": round(self.config.max_speed, 3),
             "max_steering_angle": round(self.config.max_steering_angle, 3),
+            "stop_distance_m": round(self.config.stop_distance_m, 3),
+            "full_speed_distance_m": round(self.config.full_speed_distance_m, 3),
             "message": message,
         }
         self.tuning_status_pub.publish(String(data=json.dumps(payload, ensure_ascii=True)))
@@ -430,9 +476,17 @@ class FollowControllerV4(Node):
             return
 
         updated = False
+        proposed_values = {
+            "max_speed": self.config.max_speed,
+            "max_steering_angle": self.config.max_steering_angle,
+            "stop_distance_m": self.config.stop_distance_m,
+            "full_speed_distance_m": self.config.full_speed_distance_m,
+        }
         for field_name, low, high in (
             ("max_speed", 0.0, 0.6),
-            ("max_steering_angle", 0.0, 0.45),
+            ("max_steering_angle", 0.0, 1.0),
+            ("stop_distance_m", 0.2, 1.5),
+            ("full_speed_distance_m", 0.3, 3.0),
         ):
             if field_name not in payload:
                 continue
@@ -442,16 +496,30 @@ class FollowControllerV4(Node):
                 self.get_logger().warn("ignoring invalid tuning value for %s" % field_name)
                 self._publish_tuning_status(False, "invalid %s" % field_name)
                 return
-            setattr(self.config, field_name, clamp(value, low, high))
+            proposed_values[field_name] = clamp(value, low, high)
             updated = True
 
         if not updated:
             self._publish_tuning_status(False, "no supported fields")
             return
 
+        if proposed_values["full_speed_distance_m"] <= proposed_values["stop_distance_m"]:
+            self._publish_tuning_status(False, "full_speed_distance_m must be greater than stop_distance_m")
+            return
+
+        self.config.max_speed = proposed_values["max_speed"]
+        self.config.max_steering_angle = proposed_values["max_steering_angle"]
+        self.config.stop_distance_m = proposed_values["stop_distance_m"]
+        self.config.full_speed_distance_m = proposed_values["full_speed_distance_m"]
+
         self.get_logger().info(
-            "tuning updated: max_speed=%.2f max_steering_angle=%.2f"
-            % (self.config.max_speed, self.config.max_steering_angle)
+            "tuning updated: max_speed=%.2f max_steering_angle=%.2f stop_distance_m=%.2f full_speed_distance_m=%.2f"
+            % (
+                self.config.max_speed,
+                self.config.max_steering_angle,
+                self.config.stop_distance_m,
+                self.config.full_speed_distance_m,
+            )
         )
         self._publish_tuning_status(True, "updated")
 
@@ -479,6 +547,47 @@ class FollowControllerV4(Node):
         self.get_logger().warn("signal received, stop x10")
         self._request_stop()
         raise SystemExit(0)
+
+    def _age_ms(self, last_time: float, now: float) -> Optional[int]:
+        if last_time <= 0.0:
+            return None
+        return max(0, int(round((now - last_time) * 1000.0)))
+
+    def _publish_status(self) -> None:
+        now = time.time()
+        target = self.current_target
+        image_theta_left, image_theta_right = compute_image_theta_limits(
+            self.config.image_width,
+            self.config.horizontal_fov_deg,
+        )
+        payload = {
+            "mode": self.state.mode,
+            "scan_topic": self.config.scan_topic,
+            "roi_cx": None if target is None else round(float(target["roi_cx"]), 1),
+            "roi_cy": None if target is None else round(float(target["roi_cy"]), 1),
+            "theta_raw": None if self.current_theta_raw is None else round(float(self.current_theta_raw), 4),
+            "theta_filt": None if not self.state.theta_filter_inited else round(float(self.state.theta_filtered), 4),
+            "image_theta_left_deg": round(math.degrees(image_theta_left), 2),
+            "image_theta_right_deg": round(math.degrees(image_theta_right), 2),
+            "dist_raw": None if self.current_dist_raw is None else round(float(self.current_dist_raw), 4),
+            "dist_filt": None if not self.state.dist_filter_inited or self.state.dist_filtered is None else round(float(self.state.dist_filtered), 4),
+            "valid_scan_pts": int(self.current_valid_scan_pts),
+            "stop_distance_m": round(float(self.config.stop_distance_m), 3),
+            "full_speed_distance_m": round(float(self.config.full_speed_distance_m), 3),
+            "scan_angle_min_deg": None if self.last_scan_angle_min is None else round(math.degrees(self.last_scan_angle_min), 2),
+            "scan_angle_max_deg": None if self.last_scan_angle_max is None else round(math.degrees(self.last_scan_angle_max), 2),
+            "scan_angle_increment_deg": None if self.last_scan_angle_increment is None else round(math.degrees(self.last_scan_angle_increment), 4),
+            "scan_range_count": int(self.last_scan_count),
+            "speed_cmd": round(float(self.state.speed_cmd), 4),
+            "steer_cmd": round(float(self.state.steering_cmd), 4),
+            "reason": self.status_snapshot.reason,
+            "publishing": bool(self.status_snapshot.publishing),
+            "max_speed": round(float(self.config.max_speed), 3),
+            "max_steering_angle": round(float(self.config.max_steering_angle), 3),
+            "target_age_ms": self._age_ms(self.last_target_time, now),
+            "scan_age_ms": self._age_ms(self.last_scan_time, now),
+        }
+        self.status_pub.publish(String(data=json.dumps(payload, ensure_ascii=True)))
 
     def _control_loop(self) -> None:
         if self.stop_requested:
@@ -509,6 +618,10 @@ class FollowControllerV4(Node):
             target_is_fresh=target_fresh,
             scan_is_fresh=scan_fresh,
             dt=self.loop_dt,
+        )
+        self.status_snapshot = StatusSnapshot(
+            reason=decision.reason,
+            publishing=decision.publishing,
         )
 
         if decision.publishing:
@@ -543,6 +656,7 @@ class FollowControllerV4(Node):
 def parse_args(argv: Sequence[str]) -> ControllerConfig:
     parser = argparse.ArgumentParser(description="KT demo follow controller v4")
     parser.add_argument("--enable-control", type=str, default="false")
+    parser.add_argument("--scan-topic", type=str, default="/tianracer/scan")
     parser.add_argument("--target-distance-m", type=float, default=1.0)
     parser.add_argument("--stop-distance-m", type=float, default=1.0)
     parser.add_argument("--full-speed-distance-m", type=float, default=1.6)
@@ -561,6 +675,7 @@ def parse_args(argv: Sequence[str]) -> ControllerConfig:
 
     return ControllerConfig(
         enable_control=args.enable_control.lower() in ("1", "true", "yes"),
+        scan_topic=args.scan_topic,
         target_distance_m=args.target_distance_m,
         stop_distance_m=args.stop_distance_m,
         full_speed_distance_m=args.full_speed_distance_m,

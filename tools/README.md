@@ -2,15 +2,29 @@
 
 PC-side debugging utilities.
 
+## bear_overlay_prod.html
+
+Formal demo page.
+
+- Displays `/tianracer/camera/image_compressed`
+- Draws `/bear_detection/targets`
+- Publishes `/kt_follow/mode`
+- Does NOT expose direct chassis control
+- Loads `roslib.min.js` from the same directory
+
 ## bear_overlay.html
 
 Browser-based debug page for bear detection overlay visualization.
 
+This file is retained as a legacy debug page.
+For the formal demo/product path, use `bear_overlay_prod.html`.
+
 ### Usage
 
-1. Open `bear_overlay.html` in a PC browser (Chrome recommended).
-2. Set Vehicle IP to `192.168.128.10`.
-3. Click **Connect**.
+1. For the formal demo path, open `bear_overlay_prod.html` in a PC browser.
+2. Open `bear_overlay.html` only if you explicitly need the legacy debug surface.
+3. Set Vehicle IP to `192.168.128.10`.
+4. Click **Connect**.
 
 ### Connection
 

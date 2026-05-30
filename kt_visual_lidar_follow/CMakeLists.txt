@@ -48,6 +48,7 @@ install(PROGRAMS
   scripts/kt_smooth_follow_controller_v3.py
   scripts/kt_follow_controller_v4.py
   scripts/kt_camera_control_bridge.py
+  scripts/kt_mjpeg_bridge.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

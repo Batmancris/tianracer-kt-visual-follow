@@ -8,6 +8,7 @@ Bridges /kt_camera/control JSON messages to v4l2-ctl on /dev/video0.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -38,6 +39,7 @@ class CameraControlBridge(Node):
         self.apply_lock = threading.Lock()
         self.pending_status: Optional[dict] = None
         self.status_timer = self.create_timer(0.1, self._flush_status)
+        self.poll_timer = self.create_timer(1.0, self._poll_current_status)
         self.get_logger().info("kt_camera_control_bridge started")
 
     def _flush_status(self) -> None:
@@ -51,6 +53,41 @@ class CameraControlBridge(Node):
     def _set_pending_status(self, payload: dict) -> None:
         with self.apply_lock:
             self.pending_status = payload
+
+    def _parse_control_value(self, raw_line: str) -> Optional[int]:
+        match = re.search(r"value=(-?\d+)", raw_line)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+
+    def _build_current_snapshot(self, controls: Dict[str, str]) -> dict:
+        auto_mode = self._parse_control_value(controls.get("auto_exposure", ""))
+        exposure = self._parse_control_value(controls.get("exposure_time_absolute", ""))
+        if exposure is None:
+            exposure = self._parse_control_value(controls.get("exposure_absolute", ""))
+        if exposure is None:
+            exposure = self._parse_control_value(controls.get("exposure", ""))
+        return {
+            "brightness": self._parse_control_value(controls.get("brightness", "")),
+            "exposure": exposure,
+            "auto_exposure": None if auto_mode is None else auto_mode not in (1,),
+        }
+
+    def _poll_current_status(self) -> None:
+        controls = self._load_controls()
+        if controls is None:
+            self._set_pending_status({"ok": False, "message": "camera backend offline"})
+            return
+        self._set_pending_status(
+            {
+                "ok": True,
+                "message": "camera status",
+                "current": self._build_current_snapshot(controls),
+            }
+        )
 
     def _run_command(self, args: List[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -174,6 +211,7 @@ class CameraControlBridge(Node):
         else:
             message = "camera controls applied"
 
+        refreshed_controls = self._load_controls() or controls
         self._set_pending_status(
             {
                 "ok": ok,
@@ -181,6 +219,7 @@ class CameraControlBridge(Node):
                 "unsupported": unsupported,
                 "failed": failed,
                 "message": message,
+                "current": self._build_current_snapshot(refreshed_controls),
             }
         )
 

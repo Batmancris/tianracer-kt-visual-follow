@@ -1,5 +1,5 @@
 param(
-    [string]$RobotIp = "10.129.90.241",
+    [string]$RobotIp = "10.217.185.241",
     [string]$RobotUser = "sunrise"
 )
 
@@ -43,14 +43,6 @@ run_pub_with_timeout 'publish /ackermann_cmd stop' \
   ros2 topic pub --qos-durability volatile --once /ackermann_cmd ackermann_msgs/msg/AckermannDrive '{speed: 0.0, steering_angle: 0.0}'
 
 tmux kill-session -t follow_v4 2>/dev/null || true;
-tmux kill-session -t smooth_follow 2>/dev/null || true;
-tmux kill-session -t kt_vlf 2>/dev/null || true;
-tmux kill-session -t rosbridge 2>/dev/null || true;
-tmux kill-session -t camera_ctrl 2>/dev/null || true;
-tmux kill-session -t usb_cam 2>/dev/null || true;
-tmux kill-session -t bear_det 2>/dev/null || true;
-tmux kill-session -t ros2_lidar 2>/dev/null || true;
-tmux kill-session -t core 2>/dev/null || true;
 pkill -INT -f 'kt_follow_controller_v4.py' 2>/dev/null || true;
 sleep 0.2;
 pkill -TERM -f 'kt_follow_controller_v4.py' 2>/dev/null || true;
@@ -58,12 +50,26 @@ pkill -TERM -f 'python3 .*kt_follow_controller_v4.py' 2>/dev/null || true;
 sleep 0.2;
 pkill -KILL -f 'kt_follow_controller_v4.py' 2>/dev/null || true;
 pkill -KILL -f 'python3 .*kt_follow_controller_v4.py' 2>/dev/null || true;
+
+tmux kill-session -t smooth_follow 2>/dev/null || true;
+tmux kill-session -t kt_vlf 2>/dev/null || true;
+tmux kill-session -t rosbridge 2>/dev/null || true;
+tmux kill-session -t camera_ctrl 2>/dev/null || true;
+tmux kill-session -t usb_cam 2>/dev/null || true;
+tmux kill-session -t mjpeg_bridge 2>/dev/null || true;
+tmux kill-session -t bear_det 2>/dev/null || true;
+tmux kill-session -t ros2_lidar 2>/dev/null || true;
+tmux kill-session -t core 2>/dev/null || true;
+pkill -TERM -f 'python3 .*kt_mjpeg_bridge.py' 2>/dev/null || true;
+pkill -KILL -f 'python3 .*kt_mjpeg_bridge.py' 2>/dev/null || true;
 pkill -TERM -f 'python3 .*kt_camera_control_bridge.py' 2>/dev/null || true;
 pkill -KILL -f 'python3 .*kt_camera_control_bridge.py' 2>/dev/null || true;
 pkill -f kt_smooth_follow_controller 2>/dev/null || true;
 pkill -f kt_visual_lidar_follow_node 2>/dev/null || true;
 echo '--- remaining tmux ---'
 tmux ls 2>/dev/null || true
+echo '--- follow_v4 tmux ---'
+tmux has-session -t follow_v4 2>/dev/null && echo 'follow_v4: running' || echo 'follow_v4: stopped'
 run_shell_check_with_timeout 1 'remaining follow nodes' "ros2 node list | grep -E 'smooth_follow|kt_visual_lidar_follow|kt_follow_controller_v4' || true"
 run_cmd_with_timeout 2 'ackermann' ros2 topic info /ackermann_cmd -v
 '@

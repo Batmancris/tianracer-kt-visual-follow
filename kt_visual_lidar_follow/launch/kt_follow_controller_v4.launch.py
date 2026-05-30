@@ -17,9 +17,10 @@ def arg(name):
 def generate_launch_description():
     launch_args = [
         declare_arg("enable_control", "false", "Publish /ackermann_cmd only in formal FOLLOW mode"),
-        declare_arg("target_distance_m", "1.0", "Reserved target distance parameter"),
-        declare_arg("stop_distance_m", "1.0", "Distance threshold for zero speed"),
-        declare_arg("full_speed_distance_m", "1.6", "Distance threshold for max speed"),
+        declare_arg("scan_topic", "/tianracer/scan", "LaserScan topic for direct distance reads"),
+        declare_arg("target_distance_m", "0.5", "Reserved target distance parameter"),
+        declare_arg("stop_distance_m", "0.5", "Distance threshold for zero speed"),
+        declare_arg("full_speed_distance_m", "1.0", "Distance threshold for max speed"),
         declare_arg("max_speed", "0.25", "Maximum forward speed"),
         declare_arg("max_steering_angle", "0.18", "Maximum steering angle"),
         declare_arg("max_accel", "0.60", "Acceleration limit"),
@@ -40,6 +41,7 @@ def generate_launch_description():
         output="screen",
         arguments=[
             "--enable-control", arg("enable_control"),
+            "--scan-topic", arg("scan_topic"),
             "--target-distance-m", arg("target_distance_m"),
             "--stop-distance-m", arg("stop_distance_m"),
             "--full-speed-distance-m", arg("full_speed_distance_m"),

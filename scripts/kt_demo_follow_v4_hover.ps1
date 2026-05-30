@@ -1,5 +1,5 @@
 param(
-    [string]$RobotIp = "10.129.90.241",
+    [string]$RobotIp = "10.217.185.241",
     [string]$RobotUser = "sunrise"
 )
 

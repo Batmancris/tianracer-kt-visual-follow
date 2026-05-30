@@ -3,79 +3,76 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KT Demo Overlay</title>
+  <title>KT Wireless Low-Latency Overlay</title>
   <style>
     :root {
-      --bg: #06131c;
-      --panel: #102733;
-      --panel-2: #173847;
-      --ink: #ecf4f1;
-      --muted: #9ec0bb;
-      --line: #2d5663;
-      --green: #91d36b;
-      --amber: #e6bc54;
-      --red: #d56060;
-      --cyan: #6fcfdd;
+      --bg: #07131a;
+      --panel: rgba(16, 35, 46, 0.92);
+      --panel-2: rgba(19, 46, 60, 0.96);
+      --line: #2f5f6d;
+      --ink: #ecf4f2;
+      --muted: #9ab8b8;
+      --cyan: #71d8d7;
+      --green: #98d96c;
+      --amber: #e6bd58;
+      --red: #d76b6b;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-      background: radial-gradient(circle at top, #173847 0%, var(--bg) 55%);
       color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(40, 88, 96, 0.35), transparent 40%),
+        linear-gradient(180deg, #0a1d26, #07131a 58%);
     }
-    .bar, .mode-bar, .status-bar {
+    .bar, .mode-bar, .footer-bar {
       display: flex;
       gap: 12px;
       align-items: center;
       padding: 12px 16px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(8, 20, 28, 0.9);
       flex-wrap: wrap;
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 18, 25, 0.9);
     }
-    .bar input, .bar button, .tuning-grid input, .tuning-grid button {
+    .bar input, .bar button, .panel input, .panel button {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 8px 10px;
       background: var(--panel);
       color: var(--ink);
     }
-    .bar button, .mode-bar button, .tuning-grid button {
+    .bar button, .mode-btn, .panel button {
       cursor: pointer;
       font-weight: 700;
     }
-    .mode-bar button {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 10px 18px;
-      background: var(--panel-2);
-      color: var(--ink);
-    }
-    .mode-bar button.active.follow { background: var(--green); color: #12200a; }
-    .mode-bar button.active.manual { background: var(--amber); color: #241a02; }
-    .mode-bar button.active.off { background: var(--red); color: #2a0909; }
     .layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
+      grid-template-columns: minmax(0, 1fr) 360px;
       gap: 16px;
       padding: 16px;
     }
     .video-shell {
       position: relative;
-      background: #000;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      overflow: hidden;
       min-height: 520px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #000;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    #rosImage, #overlay {
+    .video-stage {
+      position: relative;
+      width: min(100%, 480px);
+      aspect-ratio: 4 / 3;
+    }
+    #previewImage, #overlay {
       width: 100%;
       height: 100%;
-      object-fit: contain;
       display: block;
+      object-fit: contain;
     }
     #overlay {
       position: absolute;
@@ -90,8 +87,8 @@
       justify-content: center;
       text-align: center;
       color: var(--muted);
-      background: linear-gradient(180deg, rgba(16, 39, 51, 0.3), rgba(0, 0, 0, 0.7));
       padding: 24px;
+      background: linear-gradient(180deg, rgba(10, 29, 38, 0.25), rgba(0, 0, 0, 0.72));
       line-height: 1.6;
     }
     .side {
@@ -100,80 +97,146 @@
     }
     .panel {
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 18px;
       padding: 16px;
-      background: rgba(16, 39, 51, 0.85);
+      background: var(--panel);
     }
     .panel h2 {
       margin: 0 0 12px;
       font-size: 16px;
     }
+    .banner {
+      border: 1px solid rgba(113, 216, 215, 0.35);
+      background: rgba(113, 216, 215, 0.12);
+      color: var(--cyan);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 700;
+    }
     .kv {
       display: grid;
-      grid-template-columns: 118px 1fr;
+      grid-template-columns: 138px 1fr;
       gap: 8px;
-      font-size: 13px;
       margin-bottom: 8px;
-      align-items: start;
+      font-size: 13px;
+      align-items: center;
     }
-    .label { color: var(--muted); }
-    .tuning-grid {
+    .label {
+      color: var(--muted);
+    }
+    .hero-value {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--cyan);
+    }
+    .hero-sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      background: rgba(113, 216, 215, 0.14);
+      color: var(--cyan);
+    }
+    .pill.ok, .mode-btn.active.follow {
+      background: rgba(152, 217, 108, 0.18);
+      color: var(--green);
+    }
+    .pill.warn, .mode-btn.active.manual {
+      background: rgba(230, 189, 88, 0.18);
+      color: var(--amber);
+    }
+    .pill.alert, .mode-btn.active.off {
+      background: rgba(215, 107, 107, 0.18);
+      color: var(--red);
+    }
+    .mode-bar {
+      border-bottom: 1px solid var(--line);
+    }
+    .mode-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 18px;
+      background: var(--panel-2);
+      color: var(--ink);
+    }
+    .range-grid {
       display: grid;
       gap: 12px;
     }
-    .tuning-row {
+    .range-row {
       display: grid;
       gap: 8px;
     }
-    .tuning-head {
+    .range-head {
       display: flex;
       justify-content: space-between;
-      align-items: center;
       gap: 8px;
       font-size: 13px;
     }
-    .tuning-inputs {
+    .range-inputs {
       display: grid;
-      grid-template-columns: 110px 1fr;
+      grid-template-columns: 120px 1fr;
       gap: 8px;
       align-items: center;
     }
-    .tuning-inputs input[type="range"] {
+    .range-inputs input[type="range"] {
       width: 100%;
       accent-color: var(--cyan);
     }
-    .tuning-buttons {
+    .button-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 4px;
+      margin-top: 6px;
+    }
+    .age-ok {
+      color: var(--cyan);
+    }
+    .age-warn {
+      color: var(--amber);
+      font-weight: 700;
+    }
+    .age-alert {
+      color: var(--red);
+      font-weight: 700;
     }
     .mono {
       font-family: Consolas, "Courier New", monospace;
       word-break: break-word;
     }
     .hint {
+      margin: 8px 0 0;
       font-size: 12px;
       color: var(--muted);
-      margin: 8px 0 0;
       line-height: 1.5;
     }
-    .status-bar {
-      border-top: 1px solid var(--line);
-      border-bottom: 0;
-    }
-    @media (max-width: 920px) {
-      .layout { grid-template-columns: 1fr; }
-      .video-shell { min-height: 360px; }
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .video-shell {
+        min-height: 360px;
+      }
     }
   </style>
   <script src="./roslib.min.js"></script>
 </head>
 <body>
   <div class="bar">
-    <label>Rosbridge <input id="ros-url" value="ws://10.129.90.241:9090" style="width:220px"></label>
-    <label>Image Topic <input id="image-topic" value="/tianracer/camera/image_compressed" style="width:280px"></label>
-    <label>Target Topic <input id="target-topic" value="/bear_detection/targets" style="width:240px"></label>
+    <label>Robot Host <input id="robot-host" value="10.217.185.241" style="width:180px"></label>
+    <label>Rosbridge <input id="ros-url" value="ws://10.217.185.241:9090" style="width:220px"></label>
+    <label>MJPEG URL <input id="mjpeg-url" value="http://10.217.185.241:8080/stream.mjpg" style="width:320px"></label>
+    <label>Image Source <input id="image-source" value="MJPEG Low Latency" readonly style="width:180px"></label>
     <button id="connect-btn">Connect</button>
     <button id="disconnect-btn">Disconnect</button>
   </div>
@@ -188,189 +251,387 @@
 
   <div class="layout">
     <div>
+      <div class="banner">Wireless Low-Latency Mode: continuous MJPEG preview + rosbridge small messages</div>
+      <div style="height: 12px;"></div>
       <div class="video-shell">
-        <img id="rosImage" alt="ROS compressed image">
-        <canvas id="overlay"></canvas>
-        <div class="placeholder" id="placeholder">
-          正式页面只负责可视化和 <code>/kt_follow/mode</code> 发布。<br>
-          控制闭环固定走 <code>/bear_detection/targets</code> + <code>/tianracer/scan</code> + <code>kt_follow_controller_v4.py</code>。
+        <div class="video-stage">
+          <img id="previewImage" alt="KT MJPEG preview">
+          <canvas id="overlay"></canvas>
+        </div>
+        <div id="placeholder" class="placeholder">
+          Continuous MJPEG stream is the default wireless preview path.<br>
+          Rosbridge stays on targets, follow status, tuning status, camera status, and control messages.
         </div>
       </div>
-      <p style="font-size:13px; color: var(--amber); margin: 12px 4px 0;">Web display throttled, control chain unaffected.</p>
     </div>
 
     <div class="side">
       <div class="panel">
         <h2>Demo Status</h2>
         <div class="kv"><span class="label">rosbridge</span><span id="ros-status">idle</span></div>
-        <div class="kv"><span class="label">image rx fps</span><span id="image-fps">0</span></div>
-        <div class="kv"><span class="label">image display fps</span><span id="image-display-fps">0</span></div>
+        <div class="kv"><span class="label">image mode</span><span id="image-mode-status">MJPEG Low Latency</span></div>
         <div class="kv"><span class="label">target fps</span><span id="target-fps">0</span></div>
         <div class="kv"><span class="label">overlay draw fps</span><span id="overlay-fps">0</span></div>
+        <div class="kv"><span class="label">follow status fps</span><span id="follow-status-fps">0</span></div>
         <div class="kv"><span class="label">target count</span><span id="target-count">0</span></div>
+        <div class="kv"><span class="label">bear_ratio</span><span id="bear-ratio">0.00</span></div>
+        <div class="kv"><span class="label">nonempty_ratio</span><span id="nonempty-ratio">0.00</span></div>
         <div class="kv"><span class="label">last bbox</span><span id="bbox-status">-</span></div>
-        <p class="hint">
-          页面不直接发布底盘控制指令，只做模式切换和调参消息转发。
-        </p>
       </div>
 
       <div class="panel">
-        <h2>Demo Tuning / 调参面板</h2>
-        <div class="tuning-grid">
-          <div class="tuning-row">
-            <div class="tuning-head">
-              <span>Brightness</span>
-              <span id="brightness-value">50</span>
+        <h2>MJPEG Status</h2>
+        <div class="kv"><span class="label">mjpeg state</span><span id="mjpeg-state">idle</span></div>
+        <div class="kv"><span class="label">mjpeg age ms</span><span id="mjpeg-age-ms">-</span></div>
+        <div class="kv"><span class="label">mjpeg source fps</span><span id="mjpeg-source-fps">-</span></div>
+        <div class="kv"><span class="label">client count</span><span id="mjpeg-client-count">-</span></div>
+        <div class="kv"><span class="label">skipped frames</span><span id="mjpeg-skipped">-</span></div>
+        <div class="kv"><span class="label">latest seq</span><span id="mjpeg-latest-seq">-</span></div>
+        <div class="kv"><span class="label">last reconnect reason</span><span id="mjpeg-reconnect-reason" class="mono">-</span></div>
+        <div class="kv"><span class="label">last reconnect time</span><span id="mjpeg-reconnect-time">-</span></div>
+        <div class="kv"><span class="label">last status poll</span><span id="mjpeg-status-age">-</span></div>
+        <p class="hint">The page polls <span class="mono">status.json</span> once per second. Overlay and DOM updates stay rate-limited on the browser side.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Overlay Timing</h2>
+        <div class="range-grid">
+          <div class="range-row">
+            <div class="range-head"><span>overlay_delay_ms</span><span id="overlay-delay-value">80</span></div>
+            <div class="range-inputs">
+              <input id="overlay-delay-number" type="number" min="0" max="300" step="10" value="80">
+              <input id="overlay-delay-range" type="range" min="0" max="300" step="10" value="80">
             </div>
-            <div class="tuning-inputs">
+          </div>
+          <div class="range-row">
+            <div class="range-head"><span>target_hold_ms</span><span id="target-hold-value">250</span></div>
+            <div class="range-inputs">
+              <input id="target-hold-number" type="number" min="100" max="500" step="10" value="250">
+              <input id="target-hold-range" type="range" min="100" max="500" step="10" value="250">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Demo Tuning</h2>
+        <div class="range-grid">
+          <div class="range-row">
+            <div class="range-head"><span>Brightness</span><span id="brightness-value">50</span></div>
+            <div class="range-inputs">
               <input id="brightness-number" type="number" min="-64" max="64" step="1" value="50">
               <input id="brightness-range" type="range" min="-64" max="64" step="1" value="50">
             </div>
           </div>
-
-          <div class="tuning-row">
-            <div class="tuning-head">
-              <span>Exposure</span>
-              <span id="exposure-value">120</span>
-            </div>
-            <div class="tuning-inputs">
+          <div class="range-row">
+            <div class="range-head"><span>Exposure</span><span id="exposure-value">120</span></div>
+            <div class="range-inputs">
               <input id="exposure-number" type="number" min="1" max="5000" step="1" value="120">
               <input id="exposure-range" type="range" min="1" max="5000" step="1" value="120">
             </div>
           </div>
-
-          <div class="tuning-row">
-            <div class="tuning-head">
-              <span>Max Speed</span>
-              <span id="max-speed-value">0.35</span>
-            </div>
-            <div class="tuning-inputs">
-              <input id="max-speed-number" type="number" min="0" max="0.6" step="0.01" value="0.35">
-              <input id="max-speed-range" type="range" min="0" max="0.6" step="0.01" value="0.35">
+          <div class="range-row">
+            <div class="range-head"><span>Max Speed</span><span id="max-speed-value">0.50</span></div>
+            <div class="range-inputs">
+              <input id="max-speed-number" type="number" min="0" max="0.60" step="0.01" value="0.50">
+              <input id="max-speed-range" type="range" min="0" max="0.60" step="0.01" value="0.50">
             </div>
           </div>
-
-          <div class="tuning-row">
-            <div class="tuning-head">
-              <span>Max Steering Angle</span>
-              <span id="max-steering-value">0.30</span>
-            </div>
-            <div class="tuning-inputs">
-              <input id="max-steering-number" type="number" min="0" max="0.45" step="0.01" value="0.30">
-              <input id="max-steering-range" type="range" min="0" max="0.45" step="0.01" value="0.30">
+          <div class="range-row">
+            <div class="range-head"><span>Max Steering Angle</span><span id="max-steering-value">0.30</span></div>
+            <div class="range-inputs">
+              <input id="max-steering-number" type="number" min="0" max="1.00" step="0.01" value="0.30">
+              <input id="max-steering-range" type="range" min="0" max="1.00" step="0.01" value="0.30">
             </div>
           </div>
-
-          <div class="tuning-buttons">
-            <button id="apply-camera-btn">Apply Camera</button>
-            <button id="apply-follow-btn">Apply Follow Tuning</button>
-            <button id="apply-all-btn">Apply All</button>
+          <div class="range-row">
+            <div class="range-head"><span>Stop Distance</span><span id="stop-distance-value">0.50</span></div>
+            <div class="range-inputs">
+              <input id="stop-distance-number" type="number" min="0.20" max="1.50" step="0.01" value="0.50">
+              <input id="stop-distance-range" type="range" min="0.20" max="1.50" step="0.01" value="0.50">
+            </div>
+          </div>
+          <div class="range-row">
+            <div class="range-head"><span>Full Speed Distance</span><span id="full-speed-distance-value">1.00</span></div>
+            <div class="range-inputs">
+              <input id="full-speed-distance-number" type="number" min="0.30" max="3.00" step="0.01" value="1.00">
+              <input id="full-speed-distance-range" type="range" min="0.30" max="3.00" step="0.01" value="1.00">
+            </div>
           </div>
         </div>
-
-        <div style="margin-top: 16px;">
+        <div class="button-row">
+          <button id="apply-camera-btn">Apply Camera</button>
+          <button id="apply-follow-btn">Apply Follow Tuning</button>
+          <button id="apply-all-btn">Apply All</button>
+        </div>
+        <div style="margin-top: 14px;">
           <div class="kv"><span class="label">last camera apply</span><span id="camera-apply-status" class="mono">idle</span></div>
           <div class="kv"><span class="label">last follow apply</span><span id="follow-apply-status" class="mono">idle</span></div>
-          <div class="kv"><span class="label">tuning ack/status</span><span id="follow-ack-status" class="mono">idle</span></div>
+          <div class="kv"><span class="label">follow tuning status</span><span id="follow-tuning-status" class="mono">idle</span></div>
           <div class="kv"><span class="label">camera backend</span><span id="camera-backend-status" class="mono">idle</span></div>
         </div>
+      </div>
+
+      <div class="panel">
+        <h2>Follow Status</h2>
+        <div class="hero-value" id="follow-dist-filt">-</div>
+        <div class="hero-sub">dist_filt (m)</div>
+        <div style="height: 12px;"></div>
+        <div class="hero-value" id="follow-speed-cmd">-</div>
+        <div class="hero-sub">speed_cmd (m/s)</div>
+        <div style="height: 12px;"></div>
+        <div class="kv"><span class="label">steer_cmd</span><span id="follow-steer-cmd" class="hero-value" style="font-size:20px;">-</span></div>
+        <div class="kv"><span class="label">reason</span><span><span id="follow-reason" class="pill">-</span></span></div>
+        <div class="kv"><span class="label">mode</span><span id="follow-mode">-</span></div>
+        <div class="kv"><span class="label">scan_topic</span><span id="follow-scan-topic" class="mono">-</span></div>
+        <div class="kv"><span class="label">roi_cx / roi_cy</span><span id="follow-roi">-</span></div>
+        <div class="kv"><span class="label">theta_raw</span><span id="follow-theta-raw">-</span></div>
+        <div class="kv"><span class="label">theta_filt</span><span id="follow-theta-filt">-</span></div>
+        <div class="kv"><span class="label">dist_raw</span><span id="follow-dist-raw">-</span></div>
+        <div class="kv"><span class="label">valid_scan_pts</span><span id="follow-valid-scan">-</span></div>
+        <div class="kv"><span class="label">stop_distance_m</span><span id="follow-stop-distance">-</span></div>
+        <div class="kv"><span class="label">full_speed_distance_m</span><span id="follow-full-speed-distance">-</span></div>
+        <div class="kv"><span class="label">max_speed</span><span id="follow-max-speed">-</span></div>
+        <div class="kv"><span class="label">max_steering_angle</span><span id="follow-max-steering">-</span></div>
+        <div class="kv"><span class="label">target_age_ms</span><span id="follow-target-age" class="age-ok">-</span></div>
+        <div class="kv"><span class="label">scan_age_ms</span><span id="follow-scan-age" class="age-ok">-</span></div>
+        <div class="kv"><span class="label">status age</span><span id="follow-status-age">-</span></div>
       </div>
     </div>
   </div>
 
-  <div class="status-bar">
-    <span>Image: <strong>/tianracer/camera/image_compressed</strong></span>
+  <div class="footer-bar">
+    <span>MJPEG: <strong>http://10.217.185.241:8080/stream.mjpg</strong></span>
+    <span>Rosbridge: <strong>ws://10.217.185.241:9090</strong></span>
     <span>Targets: <strong>/bear_detection/targets</strong></span>
-    <span>Mode Topic: <strong>/kt_follow/mode</strong></span>
-    <span>Follow Tuning: <strong>/kt_follow/tuning</strong></span>
-    <span>Camera Control: <strong>/kt_camera/control</strong></span>
+    <span>Follow Status: <strong>/kt_follow/status</strong></span>
+    <span>Tuning Status: <strong>/kt_follow/tuning_status</strong></span>
+    <span>Camera Status: <strong>/kt_camera/status</strong></span>
   </div>
 
   <script>
+    const DEFAULT_HOST = '10.217.185.241';
+    const OVERLAY_DRAW_INTERVAL_MS = 100;
+    const DOM_UPDATE_INTERVAL_MS = 200;
+    const MJPEG_STATUS_POLL_MS = 1000;
+    const MJPEG_STALE_AGE_MS = 1000;
+    const MJPEG_UNCHANGED_SEQ_THRESHOLD = 2;
+    const MJPEG_NO_CLIENT_THRESHOLD = 2;
+    const MIN_MJPEG_RECONNECT_INTERVAL_MS = 2000;
+    const CAMERA_AUTO_APPLY_DELAY_MS = 250;
+    const OVERLAY_SOURCE_WIDTH = 640;
+    const OVERLAY_SOURCE_HEIGHT = 480;
+    const TARGET_HISTORY_LIMIT = 40;
+    const RATIO_HISTORY_LIMIT = 40;
+
+    const TARGET_TOPIC_NAME = '/bear_detection/targets';
+    const FOLLOW_STATUS_TOPIC = '/kt_follow/status';
+    const FOLLOW_TUNING_STATUS_TOPIC = '/kt_follow/tuning_status';
+    const CAMERA_STATUS_TOPIC = '/kt_camera/status';
+    const FOLLOW_MODE_TOPIC = '/kt_follow/mode';
+    const FOLLOW_TUNING_TOPIC = '/kt_follow/tuning';
+    const CAMERA_CONTROL_TOPIC = '/kt_camera/control';
+
+    const robotHostInput = document.getElementById('robot-host');
+    const rosUrlInput = document.getElementById('ros-url');
+    const mjpegUrlInput = document.getElementById('mjpeg-url');
+    const previewImage = document.getElementById('previewImage');
     const overlay = document.getElementById('overlay');
     const ctx = overlay.getContext('2d');
-    const rosImage = document.getElementById('rosImage');
     const placeholder = document.getElementById('placeholder');
+
     const rosStatus = document.getElementById('ros-status');
-    const imageFps = document.getElementById('image-fps');
-    const imageDisplayFps = document.getElementById('image-display-fps');
-    const targetFps = document.getElementById('target-fps');
-    const overlayFps = document.getElementById('overlay-fps');
-    const targetCount = document.getElementById('target-count');
-    const bboxStatus = document.getElementById('bbox-status');
+    const imageModeStatus = document.getElementById('image-mode-status');
+    const targetFpsEl = document.getElementById('target-fps');
+    const overlayFpsEl = document.getElementById('overlay-fps');
+    const followStatusFpsEl = document.getElementById('follow-status-fps');
+    const targetCountEl = document.getElementById('target-count');
+    const bearRatioEl = document.getElementById('bear-ratio');
+    const nonemptyRatioEl = document.getElementById('nonempty-ratio');
+    const bboxStatusEl = document.getElementById('bbox-status');
+
+    const mjpegAgeMsEl = document.getElementById('mjpeg-age-ms');
+    const mjpegSourceFpsEl = document.getElementById('mjpeg-source-fps');
+    const mjpegClientCountEl = document.getElementById('mjpeg-client-count');
+    const mjpegSkippedEl = document.getElementById('mjpeg-skipped');
+    const mjpegLatestSeqEl = document.getElementById('mjpeg-latest-seq');
+    const mjpegStatusAgeEl = document.getElementById('mjpeg-status-age');
+    const mjpegStateEl = document.getElementById('mjpeg-state');
+    const mjpegReconnectReasonEl = document.getElementById('mjpeg-reconnect-reason');
+    const mjpegReconnectTimeEl = document.getElementById('mjpeg-reconnect-time');
+
+    const overlayDelayNumber = document.getElementById('overlay-delay-number');
+    const overlayDelayRange = document.getElementById('overlay-delay-range');
+    const overlayDelayValue = document.getElementById('overlay-delay-value');
+    const targetHoldNumber = document.getElementById('target-hold-number');
+    const targetHoldRange = document.getElementById('target-hold-range');
+    const targetHoldValue = document.getElementById('target-hold-value');
+
     const modeState = document.getElementById('mode-state');
     const cameraApplyStatus = document.getElementById('camera-apply-status');
     const followApplyStatus = document.getElementById('follow-apply-status');
-    const followAckStatus = document.getElementById('follow-ack-status');
+    const followTuningStatus = document.getElementById('follow-tuning-status');
     const cameraBackendStatus = document.getElementById('camera-backend-status');
 
-    const IMAGE_SUB_THROTTLE_MS = 200;
-    const IMAGE_DISPLAY_INTERVAL_MS = 125;
-    const TARGET_DRAW_INTERVAL_MS = 67;
+    const followDistFilt = document.getElementById('follow-dist-filt');
+    const followSpeedCmd = document.getElementById('follow-speed-cmd');
+    const followSteerCmd = document.getElementById('follow-steer-cmd');
+    const followReason = document.getElementById('follow-reason');
+    const followMode = document.getElementById('follow-mode');
+    const followScanTopic = document.getElementById('follow-scan-topic');
+    const followRoi = document.getElementById('follow-roi');
+    const followThetaRaw = document.getElementById('follow-theta-raw');
+    const followThetaFilt = document.getElementById('follow-theta-filt');
+    const followDistRaw = document.getElementById('follow-dist-raw');
+    const followValidScan = document.getElementById('follow-valid-scan');
+    const followStopDistance = document.getElementById('follow-stop-distance');
+    const followFullSpeedDistance = document.getElementById('follow-full-speed-distance');
+    const followMaxSpeed = document.getElementById('follow-max-speed');
+    const followMaxSteering = document.getElementById('follow-max-steering');
+    const followTargetAge = document.getElementById('follow-target-age');
+    const followScanAge = document.getElementById('follow-scan-age');
+    const followStatusAge = document.getElementById('follow-status-age');
 
     const tuningFields = [
-      {
-        numberId: 'brightness-number',
-        rangeId: 'brightness-range',
-        valueId: 'brightness-value',
-        min: -64,
-        max: 64,
-        step: 1,
-        digits: 0,
-      },
-      {
-        numberId: 'exposure-number',
-        rangeId: 'exposure-range',
-        valueId: 'exposure-value',
-        min: 1,
-        max: 5000,
-        step: 1,
-        digits: 0,
-      },
-      {
-        numberId: 'max-speed-number',
-        rangeId: 'max-speed-range',
-        valueId: 'max-speed-value',
-        min: 0,
-        max: 0.6,
-        step: 0.01,
-        digits: 2,
-      },
-      {
-        numberId: 'max-steering-number',
-        rangeId: 'max-steering-range',
-        valueId: 'max-steering-value',
-        min: 0,
-        max: 0.45,
-        step: 0.01,
-        digits: 2,
-      },
+      { numberId: 'brightness-number', rangeId: 'brightness-range', valueId: 'brightness-value', min: -64, max: 64, digits: 0 },
+      { numberId: 'exposure-number', rangeId: 'exposure-range', valueId: 'exposure-value', min: 1, max: 5000, digits: 0 },
+      { numberId: 'max-speed-number', rangeId: 'max-speed-range', valueId: 'max-speed-value', min: 0, max: 0.6, digits: 2 },
+      { numberId: 'max-steering-number', rangeId: 'max-steering-range', valueId: 'max-steering-value', min: 0, max: 1.0, digits: 2 },
+      { numberId: 'stop-distance-number', rangeId: 'stop-distance-range', valueId: 'stop-distance-value', min: 0.2, max: 1.5, digits: 2 },
+      { numberId: 'full-speed-distance-number', rangeId: 'full-speed-distance-range', valueId: 'full-speed-distance-value', min: 0.3, max: 3.0, digits: 2 },
     ];
+    const cameraFieldPrefixes = ['brightness', 'exposure'];
+    const followTuningFieldPrefixes = ['max-speed', 'max-steering', 'stop-distance', 'full-speed-distance'];
 
     let ros = null;
+    let rosConnectionState = 'offline';
     let modeTopic = null;
     let tuningTopic = null;
-    let tuningStatusTopic = null;
     let cameraControlTopic = null;
-    let cameraStatusTopic = null;
-    let imageTopic = null;
     let targetTopic = null;
-    let lastTargets = [];
-    let imageFrames = 0;
-    let imageDisplayFrames = 0;
+    let followStatusTopic = null;
+    let followTuningStatusTopic = null;
+    let cameraStatusTopic = null;
+    let sessionState = 'offline';
+    let sessionDesiredOnline = false;
+    let mjpegRunning = false;
+    let mjpegWatchdogTimer = 0;
+    let mjpegReconnectTimer = 0;
+    let cameraAutoApplyTimer = 0;
+    let mjpegStatusPollInFlight = false;
+    let mjpegStatusSeqStallCount = 0;
+    let mjpegNoClientCount = 0;
+    let lastObservedMjpegSeq = null;
+    let lastReconnectReason = '-';
+    let lastReconnectTime = 0;
+    let lastMjpegConnectAt = 0;
+
     let targetFrames = 0;
     let overlayDrawFrames = 0;
-    let latestImagePayload = '';
-    let displayedImagePayload = '';
-    let lastImageDisplayAt = 0;
-    let lastOverlayDrawAt = 0;
+    let followStatusFrames = 0;
+
+    let latestFollowStatus = null;
+    let latestFollowStatusAt = 0;
+    let latestMjpegStatus = null;
+    let latestMjpegStatusAt = 0;
+    const cameraDirtyFields = new Set();
+    const tuningDirtyFields = new Set();
+
+    let targetHistory = [];
+    let ratioHistory = [];
 
     function clamp(value, low, high) {
       return Math.min(high, Math.max(low, value));
     }
 
-    function formatValue(value, digits) {
-      return digits > 0 ? Number(value).toFixed(digits) : String(Math.round(value));
+    function formatNumber(value, digits = 3) {
+      return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '-';
+    }
+
+    function formatInteger(value) {
+      return Number.isFinite(Number(value)) ? String(Math.round(Number(value))) : '-';
+    }
+
+    function formatAgeFromPerf(startAt) {
+      if (!Number.isFinite(startAt) || startAt <= 0) {
+        return '-';
+      }
+      return `${Math.max(0, Math.round(performance.now() - startAt))} ms`;
+    }
+
+    function formatWallClock(timestamp) {
+      if (!Number.isFinite(timestamp) || timestamp <= 0) {
+        return '-';
+      }
+      return new Date(timestamp).toLocaleTimeString();
+    }
+
+    function syncHostFields() {
+      const host = robotHostInput.value.trim() || DEFAULT_HOST;
+      rosUrlInput.value = `ws://${host}:9090`;
+      mjpegUrlInput.value = `http://${host}:8080/stream.mjpg`;
+    }
+
+    function buildMjpegStatusUrl() {
+      const streamUrl = mjpegUrlInput.value.trim();
+      if (!streamUrl) {
+        const host = robotHostInput.value.trim() || DEFAULT_HOST;
+        return `http://${host}:8080/status.json`;
+      }
+      try {
+        const parsed = new URL(streamUrl, window.location.href);
+        parsed.pathname = '/status.json';
+        parsed.search = '';
+        parsed.hash = '';
+        return parsed.toString();
+      } catch (_error) {
+        const host = robotHostInput.value.trim() || DEFAULT_HOST;
+        return `http://${host}:8080/status.json`;
+      }
+    }
+
+    function setSessionState(nextState) {
+      sessionState = nextState;
+      mjpegStateEl.textContent = nextState;
+    }
+
+    function resetMjpegSequenceTracking() {
+      mjpegStatusSeqStallCount = 0;
+      mjpegNoClientCount = 0;
+      lastObservedMjpegSeq = null;
+    }
+
+    function clearRosTopics() {
+      if (targetTopic) {
+        targetTopic.unsubscribe();
+      }
+      if (followStatusTopic) {
+        followStatusTopic.unsubscribe();
+      }
+      if (followTuningStatusTopic) {
+        followTuningStatusTopic.unsubscribe();
+      }
+      if (cameraStatusTopic) {
+        cameraStatusTopic.unsubscribe();
+      }
+      modeTopic = null;
+      tuningTopic = null;
+      cameraControlTopic = null;
+      targetTopic = null;
+      followStatusTopic = null;
+      followTuningStatusTopic = null;
+      cameraStatusTopic = null;
+    }
+
+    function isMjpegStatusStale(status) {
+      if (!status) {
+        return false;
+      }
+      const frameAge = Number(status.last_frame_age_ms);
+      const latestSeq = Number(status.latest_seq);
+      const staleByAge = Number.isFinite(frameAge) && frameAge > MJPEG_STALE_AGE_MS;
+      const staleBySeq = Number.isFinite(latestSeq) && mjpegStatusSeqStallCount >= MJPEG_UNCHANGED_SEQ_THRESHOLD;
+      return staleByAge || staleBySeq;
     }
 
     function syncField(field, source) {
@@ -378,9 +639,8 @@
       const rangeInput = document.getElementById(field.rangeId);
       const valueLabel = document.getElementById(field.valueId);
       const rawValue = source === 'range' ? rangeInput.value : numberInput.value;
-      const parsed = Number(rawValue);
-      const safeValue = Number.isFinite(parsed) ? clamp(parsed, field.min, field.max) : field.min;
-      const displayValue = formatValue(safeValue, field.digits);
+      const safeValue = clamp(Number(rawValue), field.min, field.max);
+      const displayValue = field.digits > 0 ? safeValue.toFixed(field.digits) : String(Math.round(safeValue));
       numberInput.value = displayValue;
       rangeInput.value = String(safeValue);
       valueLabel.textContent = displayValue;
@@ -390,71 +650,299 @@
       tuningFields.forEach((field) => {
         const numberInput = document.getElementById(field.numberId);
         const rangeInput = document.getElementById(field.rangeId);
-        numberInput.addEventListener('input', () => syncField(field, 'number'));
-        rangeInput.addEventListener('input', () => syncField(field, 'range'));
+        const fieldPrefix = field.numberId.replace(/-number$/, '');
+        numberInput.addEventListener('input', () => {
+          syncField(field, 'number');
+          if (cameraFieldPrefixes.includes(fieldPrefix)) {
+            cameraDirtyFields.add(fieldPrefix);
+            scheduleCameraAutoApply();
+          }
+          if (followTuningFieldPrefixes.includes(fieldPrefix)) {
+            tuningDirtyFields.add(fieldPrefix);
+          }
+        });
+        rangeInput.addEventListener('input', () => {
+          syncField(field, 'range');
+          if (cameraFieldPrefixes.includes(fieldPrefix)) {
+            cameraDirtyFields.add(fieldPrefix);
+            scheduleCameraAutoApply();
+          }
+          if (followTuningFieldPrefixes.includes(fieldPrefix)) {
+            tuningDirtyFields.add(fieldPrefix);
+          }
+        });
         syncField(field, 'number');
       });
     }
 
-    function resizeOverlay() {
-      const rect = rosImage.getBoundingClientRect();
-      overlay.width = rect.width || 640;
-      overlay.height = rect.height || 480;
-      overlay.style.width = `${overlay.width}px`;
-      overlay.style.height = `${overlay.height}px`;
+    function scheduleCameraAutoApply() {
+      if (cameraAutoApplyTimer) {
+        window.clearTimeout(cameraAutoApplyTimer);
+      }
+      cameraAutoApplyTimer = window.setTimeout(() => {
+        cameraAutoApplyTimer = 0;
+        if (rosConnectionState === 'connected') {
+          applyCamera();
+        }
+      }, CAMERA_AUTO_APPLY_DELAY_MS);
     }
 
-    function drawTargets() {
-      overlayDrawFrames += 1;
-      resizeOverlay();
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-      ctx.lineWidth = 3;
-      ctx.font = '16px Segoe UI';
-      ctx.strokeStyle = '#91d36b';
-      ctx.fillStyle = '#91d36b';
-
-      if (!lastTargets.length) {
-        bboxStatus.textContent = '-';
+    function setTuningFieldValue(fieldIdPrefix, value) {
+      if (!Number.isFinite(Number(value))) {
         return;
       }
+      const numberInput = document.getElementById(`${fieldIdPrefix}-number`);
+      const rangeInput = document.getElementById(`${fieldIdPrefix}-range`);
+      const valueLabel = document.getElementById(`${fieldIdPrefix}-value`);
+      if (!numberInput || !rangeInput || !valueLabel) {
+        return;
+      }
+      const safeValue = Number(value);
+      const digits = ['max-speed', 'max-steering', 'stop-distance', 'full-speed-distance'].includes(fieldIdPrefix) ? 2 : 0;
+      const displayValue = safeValue.toFixed(digits);
+      numberInput.value = displayValue;
+      rangeInput.value = displayValue;
+      valueLabel.textContent = displayValue;
+    }
 
-      const srcWidth = 640;
-      const srcHeight = 480;
+    function syncPair(numberInput, rangeInput, valueLabel, min, max) {
+      const safeValue = clamp(Number(numberInput.value), min, max);
+      numberInput.value = String(Math.round(safeValue));
+      rangeInput.value = String(Math.round(safeValue));
+      valueLabel.textContent = String(Math.round(safeValue));
+    }
+
+    function initOverlayControls() {
+      const updateOverlayDelayFromNumber = () => syncPair(overlayDelayNumber, overlayDelayRange, overlayDelayValue, 0, 300);
+      const updateOverlayDelayFromRange = () => {
+        overlayDelayNumber.value = overlayDelayRange.value;
+        overlayDelayValue.textContent = overlayDelayRange.value;
+      };
+      const updateTargetHoldFromNumber = () => syncPair(targetHoldNumber, targetHoldRange, targetHoldValue, 100, 500);
+      const updateTargetHoldFromRange = () => {
+        targetHoldNumber.value = targetHoldRange.value;
+        targetHoldValue.textContent = targetHoldRange.value;
+      };
+      overlayDelayNumber.addEventListener('input', updateOverlayDelayFromNumber);
+      overlayDelayRange.addEventListener('input', updateOverlayDelayFromRange);
+      targetHoldNumber.addEventListener('input', updateTargetHoldFromNumber);
+      targetHoldRange.addEventListener('input', updateTargetHoldFromRange);
+      updateOverlayDelayFromNumber();
+      updateTargetHoldFromNumber();
+    }
+
+    function getOverlayDelayMs() {
+      return clamp(Number(overlayDelayNumber.value), 0, 300);
+    }
+
+    function getTargetHoldMs() {
+      return clamp(Number(targetHoldNumber.value), 100, 500);
+    }
+
+    function resizeOverlay() {
+      const rect = previewImage.getBoundingClientRect();
+      overlay.width = rect.width || 640;
+      overlay.height = rect.height || 480;
+    }
+
+    function pushRatioSample(totalTargets, bearTargets, hasBox) {
+      ratioHistory.push({
+        bearRatio: totalTargets > 0 ? bearTargets / totalTargets : 0,
+        nonempty: hasBox ? 1 : 0,
+      });
+      if (ratioHistory.length > RATIO_HISTORY_LIMIT) {
+        ratioHistory.shift();
+      }
+    }
+
+    function averageRatio(key) {
+      if (!ratioHistory.length) {
+        return 0;
+      }
+      const sum = ratioHistory.reduce((acc, item) => acc + Number(item[key] || 0), 0);
+      return sum / ratioHistory.length;
+    }
+
+    function stampToMs(stamp) {
+      if (!stamp || typeof stamp.sec !== 'number') {
+        return null;
+      }
+      const secMs = stamp.sec * 1000;
+      const nanoMs = typeof stamp.nanosec === 'number' ? stamp.nanosec / 1e6 : 0;
+      return secMs + nanoMs;
+    }
+
+    function selectOverlaySnapshot(now) {
+      if (!targetHistory.length) {
+        return null;
+      }
+      const desiredAt = now - getOverlayDelayMs();
+      let best = null;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (const sample of targetHistory) {
+        const distance = Math.abs(sample.receivedAt - desiredAt);
+        if (distance < bestDistance) {
+          best = sample;
+          bestDistance = distance;
+        }
+      }
+      if (!best) {
+        return null;
+      }
+      if (now - best.receivedAt > getTargetHoldMs()) {
+        return null;
+      }
+      return best;
+    }
+
+    function getRenderMetrics() {
+      const srcWidth = OVERLAY_SOURCE_WIDTH;
+      const srcHeight = OVERLAY_SOURCE_HEIGHT;
       const scale = Math.min(overlay.width / srcWidth, overlay.height / srcHeight);
       const drawWidth = srcWidth * scale;
       const drawHeight = srcHeight * scale;
-      const offsetX = (overlay.width - drawWidth) / 2;
-      const offsetY = (overlay.height - drawHeight) / 2;
+      return {
+        scale,
+        offsetX: (overlay.width - drawWidth) / 2,
+        offsetY: (overlay.height - drawHeight) / 2,
+      };
+    }
 
-      lastTargets.forEach((target) => {
+    function drawOverlay() {
+      overlayDrawFrames += 1;
+      resizeOverlay();
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      const snapshot = selectOverlaySnapshot(performance.now());
+      if (!snapshot || !snapshot.targets.length) {
+        bboxStatusEl.textContent = '-';
+        return;
+      }
+
+      const metrics = getRenderMetrics();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#98d96c';
+      ctx.fillStyle = '#98d96c';
+      ctx.font = '16px Segoe UI';
+
+      let bboxText = '-';
+      snapshot.targets.forEach((target) => {
         const roi = target.rois && target.rois[0];
-        if (!roi || !roi.rect) return;
-        const x = offsetX + roi.rect.x_offset * scale;
-        const y = offsetY + roi.rect.y_offset * scale;
-        const w = roi.rect.width * scale;
-        const h = roi.rect.height * scale;
+        if (!roi || !roi.rect) {
+          return;
+        }
+        const x = metrics.offsetX + roi.rect.x_offset * metrics.scale;
+        const y = metrics.offsetY + roi.rect.y_offset * metrics.scale;
+        const w = roi.rect.width * metrics.scale;
+        const h = roi.rect.height * metrics.scale;
         ctx.strokeRect(x, y, w, h);
         ctx.fillText(`${target.type} ${(roi.confidence || 0).toFixed(2)}`, x, Math.max(18, y - 6));
-        bboxStatus.textContent = `${target.type} x=${roi.rect.x_offset} y=${roi.rect.y_offset} w=${roi.rect.width} h=${roi.rect.height}`;
+        bboxText = `${target.type} x=${roi.rect.x_offset} y=${roi.rect.y_offset} w=${roi.rect.width} h=${roi.rect.height}`;
       });
+      bboxStatusEl.textContent = bboxText;
     }
 
-    function maybeDisplayImage(force = false) {
-      if (!latestImagePayload) return;
-      const now = performance.now();
-      if (!force && now - lastImageDisplayAt < IMAGE_DISPLAY_INTERVAL_MS) return;
-      if (latestImagePayload === displayedImagePayload && !force) return;
-      displayedImagePayload = latestImagePayload;
-      lastImageDisplayAt = now;
-      imageDisplayFrames += 1;
-      rosImage.src = `data:image/jpeg;base64,${displayedImagePayload}`;
+    function reasonView(reason) {
+      switch (reason) {
+        case 'ok':
+          return { text: 'ok', cls: 'ok' };
+        case 'no_bear':
+        case 'target_stale':
+          return { text: reason, cls: 'alert' };
+        case 'no_scan':
+        case 'no_valid_scan':
+          return { text: reason, cls: 'warn' };
+        case 'scan_stale':
+          return { text: reason, cls: 'alert' };
+        default:
+          return { text: reason || '-', cls: 'warn' };
+      }
     }
 
-    function maybeDrawTargets(force = false) {
-      const now = performance.now();
-      if (!force && now - lastOverlayDrawAt < TARGET_DRAW_INTERVAL_MS) return;
-      lastOverlayDrawAt = now;
-      drawTargets();
+    function setAgeClass(element, value) {
+      element.className = 'age-ok';
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return;
+      }
+      if (numeric > 500) {
+        element.className = 'age-alert';
+      } else if (numeric > 200) {
+        element.className = 'age-warn';
+      }
+    }
+
+    function renderFollowStatus() {
+      if (!latestFollowStatus) {
+        followStatusAge.textContent = '-';
+        return;
+      }
+      const payload = latestFollowStatus;
+      const reason = reasonView(payload.reason);
+      followDistFilt.textContent = formatNumber(payload.dist_filt, 3);
+      followSpeedCmd.textContent = formatNumber(payload.speed_cmd, 3);
+      followSteerCmd.textContent = formatNumber(payload.steer_cmd, 3);
+      followReason.textContent = reason.text;
+      followReason.className = `pill ${reason.cls}`;
+      followMode.textContent = payload.mode || '-';
+      followScanTopic.textContent = payload.scan_topic || '-';
+      followRoi.textContent = payload.roi_cx === null || payload.roi_cy === null
+        ? '-'
+        : `${formatNumber(payload.roi_cx, 1)} / ${formatNumber(payload.roi_cy, 1)}`;
+      followThetaRaw.textContent = formatNumber(payload.theta_raw, 3);
+      followThetaFilt.textContent = formatNumber(payload.theta_filt, 3);
+      followDistRaw.textContent = formatNumber(payload.dist_raw, 3);
+      followValidScan.textContent = formatInteger(payload.valid_scan_pts);
+      followStopDistance.textContent = formatNumber(payload.stop_distance_m, 3);
+      followFullSpeedDistance.textContent = formatNumber(payload.full_speed_distance_m, 3);
+      followMaxSpeed.textContent = formatNumber(payload.max_speed, 3);
+      followMaxSteering.textContent = formatNumber(payload.max_steering_angle, 3);
+      if (!tuningDirtyFields.has('stop-distance')) {
+        setTuningFieldValue('stop-distance', payload.stop_distance_m);
+      }
+      if (!tuningDirtyFields.has('full-speed-distance')) {
+        setTuningFieldValue('full-speed-distance', payload.full_speed_distance_m);
+      }
+      if (!tuningDirtyFields.has('max-speed')) {
+        setTuningFieldValue('max-speed', payload.max_speed);
+      }
+      if (!tuningDirtyFields.has('max-steering')) {
+        setTuningFieldValue('max-steering', payload.max_steering_angle);
+      }
+      followTargetAge.textContent = formatInteger(payload.target_age_ms);
+      followScanAge.textContent = formatInteger(payload.scan_age_ms);
+      setAgeClass(followTargetAge, payload.target_age_ms);
+      setAgeClass(followScanAge, payload.scan_age_ms);
+      followStatusAge.textContent = formatAgeFromPerf(latestFollowStatusAt);
+    }
+
+    function renderMjpegStatus() {
+      if (!latestMjpegStatus) {
+        mjpegAgeMsEl.textContent = '-';
+        mjpegSourceFpsEl.textContent = '-';
+        mjpegClientCountEl.textContent = '-';
+        mjpegSkippedEl.textContent = '-';
+        mjpegLatestSeqEl.textContent = '-';
+        mjpegStatusAgeEl.textContent = '-';
+        mjpegReconnectReasonEl.textContent = lastReconnectReason;
+        mjpegReconnectTimeEl.textContent = formatWallClock(lastReconnectTime);
+        return;
+      }
+      mjpegAgeMsEl.textContent = formatNumber(latestMjpegStatus.last_frame_age_ms, 1);
+      mjpegSourceFpsEl.textContent = formatNumber(latestMjpegStatus.source_fps_est, 2);
+      mjpegClientCountEl.textContent = formatInteger(latestMjpegStatus.client_count);
+      mjpegSkippedEl.textContent = formatInteger(latestMjpegStatus.total_frames_skipped);
+      mjpegLatestSeqEl.textContent = formatInteger(latestMjpegStatus.latest_seq);
+      mjpegStatusAgeEl.textContent = formatAgeFromPerf(latestMjpegStatusAt);
+      mjpegReconnectReasonEl.textContent = lastReconnectReason;
+      mjpegReconnectTimeEl.textContent = formatWallClock(lastReconnectTime);
+    }
+
+    function renderStats() {
+      targetCountEl.textContent = targetHistory.length ? String(targetHistory[targetHistory.length - 1].targets.length) : '0';
+      bearRatioEl.textContent = averageRatio('bearRatio').toFixed(2);
+      nonemptyRatioEl.textContent = averageRatio('nonempty').toFixed(2);
+      renderFollowStatus();
+      renderMjpegStatus();
     }
 
     function updateModeButtons(mode) {
@@ -464,18 +952,165 @@
       modeState.textContent = `mode=${mode}`;
     }
 
-    function setApplyButtonsDisabled(disabled) {
+    function setActionButtonsDisabled(disabled) {
       document.getElementById('apply-camera-btn').disabled = disabled;
       document.getElementById('apply-follow-btn').disabled = disabled;
       document.getElementById('apply-all-btn').disabled = disabled;
     }
 
-    function isRosReady() {
-      return Boolean(ros && modeTopic && tuningTopic && cameraControlTopic);
+    function buildStreamUrl() {
+      const host = robotHostInput.value.trim() || DEFAULT_HOST;
+      const baseUrl = (mjpegUrlInput.value.trim() || `http://${host}:8080/stream.mjpg`).replace(/\?.*$/, '');
+      const separator = baseUrl.includes('?') ? '&' : '?';
+      return `${baseUrl}${separator}t=${Date.now()}`;
+    }
+
+    function clearPreviewImage() {
+      previewImage.src = '';
+      previewImage.removeAttribute('src');
+    }
+
+    function stopMjpegPreview(clearStatus = false) {
+      mjpegRunning = false;
+      if (mjpegReconnectTimer) {
+        clearTimeout(mjpegReconnectTimer);
+        mjpegReconnectTimer = 0;
+      }
+      clearPreviewImage();
+      if (clearStatus) {
+        latestMjpegStatus = null;
+        latestMjpegStatusAt = 0;
+        resetMjpegSequenceTracking();
+      }
+      bboxStatusEl.textContent = '-';
+      placeholder.style.display = 'flex';
+    }
+
+    function startMjpegPreview() {
+      if (!sessionDesiredOnline || mjpegRunning) {
+        return false;
+      }
+      if (!['offline', 'stale', 'error', 'reconnecting', 'connecting'].includes(sessionState)) {
+        return false;
+      }
+      lastMjpegConnectAt = Date.now();
+      mjpegRunning = true;
+      imageModeStatus.textContent = 'MJPEG Low Latency';
+      placeholder.style.display = 'flex';
+      previewImage.src = buildStreamUrl();
+      if (sessionState !== 'reconnecting') {
+        setSessionState('connecting');
+      }
+      return true;
+    }
+
+    function reconnectMjpegPreview(reason) {
+      if (!sessionDesiredOnline) {
+        return;
+      }
+      lastReconnectReason = reason;
+      lastReconnectTime = Date.now();
+      if (mjpegReconnectTimer) {
+        return;
+      }
+      setSessionState('reconnecting');
+      stopMjpegPreview(false);
+      const waitMs = Math.max(0, MIN_MJPEG_RECONNECT_INTERVAL_MS - (Date.now() - lastMjpegConnectAt));
+      mjpegReconnectTimer = window.setTimeout(() => {
+        mjpegReconnectTimer = 0;
+        if (!sessionDesiredOnline) {
+          return;
+        }
+        startMjpegPreview();
+      }, waitMs);
+    }
+
+    function scheduleMjpegWatchdog(immediate = false) {
+      if (mjpegWatchdogTimer) {
+        clearTimeout(mjpegWatchdogTimer);
+        mjpegWatchdogTimer = 0;
+      }
+      if (!sessionDesiredOnline) {
+        return;
+      }
+      mjpegWatchdogTimer = window.setTimeout(mjpegWatchdogLoop, immediate ? 0 : MJPEG_STATUS_POLL_MS);
+    }
+
+    function handleGoodMjpegStatus(status) {
+      latestMjpegStatus = status;
+      latestMjpegStatusAt = performance.now();
+      const latestSeq = Number(status.latest_seq);
+      const clientCount = Number(status.client_count);
+      if (Number.isFinite(latestSeq)) {
+        if (lastObservedMjpegSeq === latestSeq) {
+          mjpegStatusSeqStallCount += 1;
+        } else {
+          lastObservedMjpegSeq = latestSeq;
+          mjpegStatusSeqStallCount = 0;
+        }
+      }
+      if (Number.isFinite(clientCount) && clientCount <= 0) {
+        mjpegNoClientCount += 1;
+      } else {
+        mjpegNoClientCount = 0;
+      }
+      const hasFrameAge = Number.isFinite(Number(status.last_frame_age_ms));
+      if (isMjpegStatusStale(status)) {
+        setSessionState('stale');
+        reconnectMjpegPreview('stale stream');
+        return;
+      }
+      if (sessionDesiredOnline && mjpegRunning && mjpegNoClientCount >= MJPEG_NO_CLIENT_THRESHOLD) {
+        setSessionState('stale');
+        reconnectMjpegPreview('no mjpeg client');
+        return;
+      }
+      if (sessionDesiredOnline && rosConnectionState === 'connected' && mjpegRunning && Number.isFinite(latestSeq) && hasFrameAge) {
+        setSessionState('live');
+      } else if (sessionDesiredOnline && rosConnectionState !== 'error') {
+        setSessionState(mjpegReconnectTimer ? 'reconnecting' : 'connecting');
+      }
+    }
+
+    function handleBadMjpegStatus(reason) {
+      latestMjpegStatusAt = 0;
+      if (!sessionDesiredOnline) {
+        return;
+      }
+      setSessionState(mjpegRunning ? 'stale' : 'error');
+      reconnectMjpegPreview(reason);
+    }
+
+    function mjpegWatchdogLoop() {
+      if (!sessionDesiredOnline) {
+        return;
+      }
+      if (mjpegStatusPollInFlight) {
+        scheduleMjpegWatchdog(false);
+        return;
+      }
+      mjpegStatusPollInFlight = true;
+      fetch(buildMjpegStatusUrl(), { cache: 'no-store' })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((status) => {
+          handleGoodMjpegStatus(status);
+        })
+        .catch(() => {
+          handleBadMjpegStatus('status poll failed');
+        })
+        .finally(() => {
+          mjpegStatusPollInFlight = false;
+          scheduleMjpegWatchdog(false);
+        });
     }
 
     function publishJson(topic, payload, statusElement, label) {
-      if (!isRosReady() || !topic) {
+      if (!ros || !topic) {
         statusElement.textContent = `${label}: rosbridge not connected`;
         return false;
       }
@@ -497,10 +1132,16 @@
       return {
         max_speed: Number(document.getElementById('max-speed-number').value),
         max_steering_angle: Number(document.getElementById('max-steering-number').value),
+        stop_distance_m: Number(document.getElementById('stop-distance-number').value),
+        full_speed_distance_m: Number(document.getElementById('full-speed-distance-number').value),
       };
     }
 
     function applyCamera() {
+      if (cameraAutoApplyTimer) {
+        window.clearTimeout(cameraAutoApplyTimer);
+        cameraAutoApplyTimer = 0;
+      }
       return publishJson(cameraControlTopic, getCameraPayload(), cameraApplyStatus, 'camera sent');
     }
 
@@ -509,167 +1150,256 @@
     }
 
     function applyAll() {
-      const cameraOk = applyCamera();
-      const followOk = applyFollowTuning();
-      if (cameraOk || followOk) {
-        cameraBackendStatus.textContent = 'waiting for camera status';
-        followAckStatus.textContent = 'waiting for follow ack';
-      }
+      applyCamera();
+      applyFollowTuning();
     }
 
-    function connect() {
-      if (typeof ROSLIB === 'undefined') {
-        rosStatus.textContent = 'roslib missing';
-        return;
+    function resetRosState(closeSocket) {
+      clearRosTopics();
+      if (cameraAutoApplyTimer) {
+        window.clearTimeout(cameraAutoApplyTimer);
+        cameraAutoApplyTimer = 0;
       }
+      cameraDirtyFields.clear();
+      tuningDirtyFields.clear();
+      if (closeSocket && ros) {
+        ros.close();
+      }
+      ros = null;
+      rosConnectionState = 'offline';
+      rosStatus.textContent = 'offline';
+      setActionButtonsDisabled(true);
+    }
 
-      const rosUrl = document.getElementById('ros-url').value.trim();
-      const imageTopicName = document.getElementById('image-topic').value.trim();
-      const targetTopicName = document.getElementById('target-topic').value.trim();
-
-      disconnect();
-      ros = new ROSLIB.Ros({ url: rosUrl });
+    function ensureRosConnection() {
+      if (typeof ROSLIB === 'undefined') {
+        rosConnectionState = 'error';
+        rosStatus.textContent = 'roslib missing';
+        setSessionState('error');
+        return false;
+      }
+      if (ros && (rosConnectionState === 'connected' || rosConnectionState === 'connecting')) {
+        return false;
+      }
+      resetRosState(true);
+      ros = new ROSLIB.Ros({ url: rosUrlInput.value.trim() });
+      const currentRos = ros;
+      rosConnectionState = 'connecting';
       rosStatus.textContent = 'connecting';
-      setApplyButtonsDisabled(true);
 
-      ros.on('connection', () => {
+      currentRos.on('connection', () => {
+        if (ros !== currentRos) {
+          return;
+        }
+        rosConnectionState = 'connected';
         rosStatus.textContent = 'connected';
-        placeholder.style.display = 'none';
+        modeTopic = new ROSLIB.Topic({ ros, name: FOLLOW_MODE_TOPIC, messageType: 'std_msgs/msg/String' });
+        tuningTopic = new ROSLIB.Topic({ ros, name: FOLLOW_TUNING_TOPIC, messageType: 'std_msgs/msg/String' });
+        cameraControlTopic = new ROSLIB.Topic({ ros, name: CAMERA_CONTROL_TOPIC, messageType: 'std_msgs/msg/String' });
+        targetTopic = new ROSLIB.Topic({ ros, name: TARGET_TOPIC_NAME, messageType: 'ai_msgs/msg/PerceptionTargets' });
+        followStatusTopic = new ROSLIB.Topic({ ros, name: FOLLOW_STATUS_TOPIC, messageType: 'std_msgs/msg/String' });
+        followTuningStatusTopic = new ROSLIB.Topic({ ros, name: FOLLOW_TUNING_STATUS_TOPIC, messageType: 'std_msgs/msg/String' });
+        cameraStatusTopic = new ROSLIB.Topic({ ros, name: CAMERA_STATUS_TOPIC, messageType: 'std_msgs/msg/String' });
 
-        modeTopic = new ROSLIB.Topic({
-          ros,
-          name: '/kt_follow/mode',
-          messageType: 'std_msgs/msg/String',
-        });
-        tuningTopic = new ROSLIB.Topic({
-          ros,
-          name: '/kt_follow/tuning',
-          messageType: 'std_msgs/msg/String',
-        });
-        tuningStatusTopic = new ROSLIB.Topic({
-          ros,
-          name: '/kt_follow/tuning_status',
-          messageType: 'std_msgs/msg/String',
-        });
-        cameraControlTopic = new ROSLIB.Topic({
-          ros,
-          name: '/kt_camera/control',
-          messageType: 'std_msgs/msg/String',
-        });
-        cameraStatusTopic = new ROSLIB.Topic({
-          ros,
-          name: '/kt_camera/status',
-          messageType: 'std_msgs/msg/String',
-        });
-        imageTopic = new ROSLIB.Topic({
-          ros,
-          name: imageTopicName,
-          messageType: 'sensor_msgs/msg/CompressedImage',
-          throttle_rate: IMAGE_SUB_THROTTLE_MS,
-          queue_length: 1,
-        });
-        targetTopic = new ROSLIB.Topic({
-          ros,
-          name: targetTopicName,
-          messageType: 'ai_msgs/msg/PerceptionTargets',
+        targetTopic.subscribe((msg) => {
+          targetFrames += 1;
+          const allTargets = Array.isArray(msg.targets) ? msg.targets : [];
+          const bearTargets = allTargets.filter((target) => target.type === 'bear');
+          const hasBox = bearTargets.some((target) => target.rois && target.rois[0] && target.rois[0].rect);
+          targetHistory.push({
+            receivedAt: performance.now(),
+            rosStampMs: stampToMs(msg.header && msg.header.stamp),
+            targets: bearTargets,
+          });
+          if (targetHistory.length > TARGET_HISTORY_LIMIT) {
+            targetHistory.shift();
+          }
+          pushRatioSample(allTargets.length, bearTargets.length, hasBox);
         });
 
-        tuningStatusTopic.subscribe((msg) => {
-          followAckStatus.textContent = msg.data || 'empty';
+        followStatusTopic.subscribe((msg) => {
+          followStatusFrames += 1;
+          latestFollowStatusAt = performance.now();
+          try {
+            latestFollowStatus = JSON.parse(msg.data || '{}');
+            if (latestFollowStatus && typeof latestFollowStatus.mode === 'string') {
+              updateModeButtons(String(latestFollowStatus.mode).toUpperCase());
+            }
+          } catch (_error) {
+            latestFollowStatus = { reason: 'status json error' };
+          }
+        });
+
+        followTuningStatusTopic.subscribe((msg) => {
+          followTuningStatus.textContent = msg.data || 'empty';
+          try {
+            const payload = JSON.parse(msg.data || '{}');
+            if (payload && payload.ok === true) {
+              tuningDirtyFields.clear();
+            }
+          } catch (_error) {
+            // Ignore malformed status payloads and keep local edits untouched.
+          }
         });
 
         cameraStatusTopic.subscribe((msg) => {
           cameraBackendStatus.textContent = msg.data || 'empty';
+          try {
+            const payload = JSON.parse(msg.data || '{}');
+            if (payload && payload.current) {
+              if (!cameraDirtyFields.has('brightness')) {
+                setTuningFieldValue('brightness', payload.current.brightness);
+              }
+              if (!cameraDirtyFields.has('exposure')) {
+                setTuningFieldValue('exposure', payload.current.exposure);
+              }
+            }
+            if (payload && payload.ok === true && payload.message === 'camera controls applied') {
+              cameraDirtyFields.clear();
+              if (payload.current) {
+                setTuningFieldValue('brightness', payload.current.brightness);
+                setTuningFieldValue('exposure', payload.current.exposure);
+              }
+              cameraApplyStatus.textContent = `camera applied: ${JSON.stringify(payload.current || {})}`;
+            }
+          } catch (_error) {
+            // Keep raw backend text when status is not JSON.
+          }
         });
 
-        imageTopic.subscribe((msg) => {
-          imageFrames += 1;
-          latestImagePayload = typeof msg.data === 'string' ? msg.data : '';
-          maybeDisplayImage();
-        });
-
-        targetTopic.subscribe((msg) => {
-          targetFrames += 1;
-          lastTargets = (msg.targets || []).filter((target) => target.type === 'bear');
-          targetCount.textContent = String(lastTargets.length);
-          maybeDrawTargets();
-        });
-
-        setApplyButtonsDisabled(false);
+        setActionButtonsDisabled(false);
+        if (sessionDesiredOnline && mjpegRunning && latestMjpegStatus && !isMjpegStatusStale(latestMjpegStatus)) {
+          setSessionState('live');
+        }
       });
 
-      ros.on('error', () => {
+      currentRos.on('error', () => {
+        if (ros !== currentRos) {
+          return;
+        }
+        rosConnectionState = 'error';
         rosStatus.textContent = 'error';
-        setApplyButtonsDisabled(true);
+        setActionButtonsDisabled(true);
+        if (sessionDesiredOnline) {
+          setSessionState('error');
+        }
       });
 
-      ros.on('close', () => {
-        rosStatus.textContent = 'closed';
-        setApplyButtonsDisabled(true);
+      currentRos.on('close', () => {
+        if (ros !== currentRos) {
+          return;
+        }
+        clearRosTopics();
+        ros = null;
+        rosConnectionState = 'offline';
+        rosStatus.textContent = 'offline';
+        setActionButtonsDisabled(true);
+        if (sessionDesiredOnline) {
+          setSessionState('error');
+        }
       });
+      return true;
     }
 
-    function disconnect() {
-      if (imageTopic) imageTopic.unsubscribe();
-      if (targetTopic) targetTopic.unsubscribe();
-      if (tuningStatusTopic) tuningStatusTopic.unsubscribe();
-      if (cameraStatusTopic) cameraStatusTopic.unsubscribe();
-      if (ros) ros.close();
-      ros = null;
-      modeTopic = null;
-      tuningTopic = null;
-      tuningStatusTopic = null;
-      cameraControlTopic = null;
-      cameraStatusTopic = null;
-      imageTopic = null;
-      targetTopic = null;
-      rosStatus.textContent = 'idle';
-      latestImagePayload = '';
-      displayedImagePayload = '';
-      lastImageDisplayAt = 0;
-      lastOverlayDrawAt = 0;
-      rosImage.removeAttribute('src');
-      placeholder.style.display = 'flex';
-      lastTargets = [];
-      targetCount.textContent = '0';
+    function startSession() {
+      if (sessionState === 'live' && rosConnectionState === 'connected' && mjpegRunning) {
+        return;
+      }
+      sessionDesiredOnline = true;
+      if (sessionState === 'offline' || sessionState === 'error' || sessionState === 'stale') {
+        setSessionState('connecting');
+      }
+      ensureRosConnection();
+      startMjpegPreview();
+      scheduleMjpegWatchdog(true);
+    }
+
+    function stopSession() {
+      sessionDesiredOnline = false;
+      if (mjpegWatchdogTimer) {
+        clearTimeout(mjpegWatchdogTimer);
+        mjpegWatchdogTimer = 0;
+      }
+      mjpegStatusPollInFlight = false;
+      stopMjpegPreview(true);
+      resetRosState(true);
+      setSessionState('offline');
+      latestFollowStatus = null;
+      latestFollowStatusAt = 0;
+      followTuningStatus.textContent = 'idle';
+      cameraBackendStatus.textContent = 'idle';
       cameraApplyStatus.textContent = 'idle';
       followApplyStatus.textContent = 'idle';
-      followAckStatus.textContent = 'idle';
-      cameraBackendStatus.textContent = 'idle';
-      setApplyButtonsDisabled(true);
-      drawTargets();
+      imageModeStatus.textContent = 'idle';
     }
 
     function publishMode(mode) {
       updateModeButtons(mode);
-      if (!modeTopic) return;
-      modeTopic.publish(new ROSLIB.Message({ data: mode }));
+      if (modeTopic) {
+        modeTopic.publish(new ROSLIB.Message({ data: mode }));
+      }
     }
 
     setInterval(() => {
-      imageFps.textContent = String(imageFrames);
-      imageDisplayFps.textContent = String(imageDisplayFrames);
-      targetFps.textContent = String(targetFrames);
-      overlayFps.textContent = String(overlayDrawFrames);
-      imageFrames = 0;
-      imageDisplayFrames = 0;
+      targetFpsEl.textContent = String(targetFrames);
+      overlayFpsEl.textContent = String(overlayDrawFrames);
+      followStatusFpsEl.textContent = String(followStatusFrames);
       targetFrames = 0;
       overlayDrawFrames = 0;
+      followStatusFrames = 0;
     }, 1000);
 
-    document.getElementById('connect-btn').addEventListener('click', connect);
-    document.getElementById('disconnect-btn').addEventListener('click', disconnect);
+    setInterval(drawOverlay, OVERLAY_DRAW_INTERVAL_MS);
+    setInterval(renderStats, DOM_UPDATE_INTERVAL_MS);
+
+    robotHostInput.addEventListener('input', syncHostFields);
+    robotHostInput.addEventListener('change', () => {
+      syncHostFields();
+      if (sessionDesiredOnline) {
+        resetRosState(true);
+        ensureRosConnection();
+        reconnectMjpegPreview('host changed');
+      }
+    });
+    rosUrlInput.addEventListener('change', () => {
+      if (sessionDesiredOnline) {
+        resetRosState(true);
+        ensureRosConnection();
+      }
+    });
+    mjpegUrlInput.addEventListener('change', () => {
+      if (sessionDesiredOnline) {
+        reconnectMjpegPreview('stream url changed');
+      }
+    });
+    document.getElementById('connect-btn').addEventListener('click', startSession);
+    document.getElementById('disconnect-btn').addEventListener('click', stopSession);
     document.getElementById('apply-camera-btn').addEventListener('click', applyCamera);
     document.getElementById('apply-follow-btn').addEventListener('click', applyFollowTuning);
     document.getElementById('apply-all-btn').addEventListener('click', applyAll);
     document.querySelectorAll('.mode-btn').forEach((button) => {
       button.addEventListener('click', () => publishMode(button.dataset.mode));
     });
-    rosImage.addEventListener('load', () => maybeDrawTargets(true));
-    window.addEventListener('resize', () => maybeDrawTargets(true));
+    previewImage.addEventListener('load', () => {
+      placeholder.style.display = 'none';
+      drawOverlay();
+    });
+    previewImage.addEventListener('error', () => {
+      placeholder.style.display = 'flex';
+      if (sessionDesiredOnline) {
+        setSessionState('stale');
+        reconnectMjpegPreview('image error');
+      }
+    });
+    window.addEventListener('resize', drawOverlay);
 
+    robotHostInput.value = DEFAULT_HOST;
+    syncHostFields();
     initTuningFields();
-    setApplyButtonsDisabled(true);
+    initOverlayControls();
+    setActionButtonsDisabled(true);
+    setSessionState('offline');
+    startSession();
   </script>
 </body>
 </html>
