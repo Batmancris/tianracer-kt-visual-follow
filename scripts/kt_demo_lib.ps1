@@ -1,6 +1,24 @@
 Set-StrictMode -Version Latest
 . "$PSScriptRoot\kt_config.ps1"
 
+function Get-KtRemoteRosSetup {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RemoteWorkspace
+    )
+
+    return @"
+if [ -f /opt/tros/humble/setup.bash ]; then
+  source /opt/tros/humble/setup.bash >/dev/null 2>&1 || true
+elif [ -f /opt/ros/humble/setup.bash ]; then
+  source /opt/ros/humble/setup.bash >/dev/null 2>&1 || true
+fi
+if [ -f $RemoteWorkspace/install/setup.bash ]; then
+  source $RemoteWorkspace/install/setup.bash >/dev/null 2>&1 || true
+fi
+"@
+}
+
 function Invoke-KtRobotBash {
     param(
         [Parameter(Mandatory = $true)]
@@ -13,16 +31,12 @@ function Invoke-KtRobotBash {
 
     $config = Get-KtRobotConfig -RobotIp $RobotIp -RobotUser $RobotUser -RemoteWorkspace $RemoteWorkspace
 
+    $rosSetup = Get-KtRemoteRosSetup -RemoteWorkspace $config.RemoteWorkspace
     $preamble = @"
 set -e
+$rosSetup
 if [ -f ~/.bashrc ]; then
   source ~/.bashrc >/dev/null 2>&1 || true
-fi
-if command -v ros2_setup >/dev/null 2>&1; then
-  ros2_setup >/dev/null 2>&1 || true
-fi
-if [ -f $($config.RemoteWorkspace)/install/setup.bash ]; then
-  source $($config.RemoteWorkspace)/install/setup.bash >/dev/null 2>&1 || true
 fi
 $RemoteBody
 "@
