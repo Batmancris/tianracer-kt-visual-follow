@@ -1,14 +1,17 @@
 Set-StrictMode -Version Latest
+. "$PSScriptRoot\kt_config.ps1"
 
 function Invoke-KtRobotBash {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RobotIp,
-        [Parameter(Mandatory = $true)]
         [string]$RobotUser,
+        [string]$RemoteWorkspace,
         [Parameter(Mandatory = $true)]
         [string]$RemoteBody
     )
+
+    $config = Get-KtRobotConfig -RobotIp $RobotIp -RobotUser $RobotUser -RemoteWorkspace $RemoteWorkspace
 
     $preamble = @"
 set -e
@@ -18,14 +21,14 @@ fi
 if command -v ros2_setup >/dev/null 2>&1; then
   ros2_setup >/dev/null 2>&1 || true
 fi
-if [ -f ~/tianracer_ros2_ws/install/setup.bash ]; then
-  source ~/tianracer_ros2_ws/install/setup.bash >/dev/null 2>&1 || true
+if [ -f $($config.RemoteWorkspace)/install/setup.bash ]; then
+  source $($config.RemoteWorkspace)/install/setup.bash >/dev/null 2>&1 || true
 fi
 $RemoteBody
 "@
 
     $script = $preamble -replace "`r`n", "`n"
-    return $script | ssh "$RobotUser@$RobotIp" "tr -d '\r' | bash -s"
+    return $script | ssh "$($config.RobotUser)@$($config.RobotIp)" "tr -d '\r' | bash -s"
 }
 
 function Get-KtReadySummary {

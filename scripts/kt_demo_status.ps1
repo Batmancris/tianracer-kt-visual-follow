@@ -1,10 +1,17 @@
 param(
-    [string]$RobotIp = "10.217.185.241",
-    [string]$RobotUser = "sunrise"
+    [string]$RobotIp,
+    [string]$RobotUser,
+    [int]$RosbridgePort,
+    [int]$MjpegPort,
+    [string]$RemoteWorkspace,
+    [string]$VideoDevice,
+    [string]$LidarDevice
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\kt_config.ps1"
 . "$PSScriptRoot\kt_demo_lib.ps1"
+$config = Get-KtRobotConfig -RobotIp $RobotIp -RobotUser $RobotUser -RosbridgePort $RosbridgePort -MjpegPort $MjpegPort -RemoteWorkspace $RemoteWorkspace -VideoDevice $VideoDevice -LidarDevice $LidarDevice
 
 $remote = @'
 READY_TO_FOLLOW=YES
@@ -154,12 +161,16 @@ else
   echo 'mjpeg_bridge: missing'
 fi
 echo '--- listeners ---'
-ss -ltn '( sport = :8080 or sport = :9090 )' 2>/dev/null || netstat -ltn 2>/dev/null | grep -E ':8080|:9090' || true
-echo '--- mjpeg url ---'
-echo 'http://10.217.185.241:8080/stream.mjpg'
-echo '--- mjpeg status ---'
-echo 'http://10.217.185.241:8080/status.json'
-curl -fsS http://10.217.185.241:8080/status.json || true
+'@
+
+# Inject config values into the remote script (bash variables stay untouched)
+$remote += "ss -ltn '( sport = :$($config.MjpegPort) or sport = :$($config.RosbridgePort) )' 2>/dev/null || netstat -ltn 2>/dev/null | grep -E ':$($config.MjpegPort)|:$($config.RosbridgePort)' || true`n"
+
+$remote += "echo 'http://$($config.RobotIp):$($config.MjpegPort)/stream.mjpg'`n"
+$remote += "echo 'http://$($config.RobotIp):$($config.MjpegPort)/status.json'`n"
+$remote += "curl -fsS http://$($config.RobotIp):$($config.MjpegPort)/status.json || true`n"
+
+$remote += @'
 echo '--- ackermann ---'
 topic_info /ackermann_cmd
 ackermann_block="$(topic_info_capture /ackermann_cmd)"
@@ -236,5 +247,5 @@ if [ "$READY_TO_FOLLOW" = "NO" ]; then
 fi
 '@
 
-Write-Host "KT Demo Status  $RobotUser@$RobotIp" -ForegroundColor Cyan
-Invoke-KtRobotBash -RobotIp $RobotIp -RobotUser $RobotUser -RemoteBody $remote
+Write-Host "KT Demo Status  $($config.RobotUser)@$($config.RobotIp)" -ForegroundColor Cyan
+Invoke-KtRobotBash -RobotIp $config.RobotIp -RobotUser $config.RobotUser -RemoteWorkspace $config.RemoteWorkspace -RemoteBody $remote

@@ -1,10 +1,17 @@
 param(
-    [string]$RobotIp = "10.217.185.241",
-    [string]$RobotUser = "sunrise"
+    [string]$RobotIp,
+    [string]$RobotUser,
+    [int]$RosbridgePort,
+    [int]$MjpegPort,
+    [string]$RemoteWorkspace,
+    [string]$VideoDevice,
+    [string]$LidarDevice
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\kt_config.ps1"
 . "$PSScriptRoot\kt_demo_lib.ps1"
+$config = Get-KtRobotConfig -RobotIp $RobotIp -RobotUser $RobotUser -RosbridgePort $RosbridgePort -MjpegPort $MjpegPort -RemoteWorkspace $RemoteWorkspace -VideoDevice $VideoDevice -LidarDevice $LidarDevice
 
 $remote = @'
 run_pub_with_timeout() {
@@ -74,5 +81,5 @@ run_shell_check_with_timeout 1 'remaining follow nodes' "ros2 node list | grep -
 run_cmd_with_timeout 2 'ackermann' ros2 topic info /ackermann_cmd -v
 '@
 
-Write-Host "KT Demo Stop/Cleanup  $RobotUser@$RobotIp" -ForegroundColor Cyan
-Invoke-KtRobotBash -RobotIp $RobotIp -RobotUser $RobotUser -RemoteBody $remote
+Write-Host "KT Demo Stop/Cleanup  $($config.RobotUser)@$($config.RobotIp)" -ForegroundColor Cyan
+Invoke-KtRobotBash -RobotIp $config.RobotIp -RobotUser $config.RobotUser -RemoteWorkspace $config.RemoteWorkspace -RemoteBody $remote

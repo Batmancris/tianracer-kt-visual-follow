@@ -54,5 +54,8 @@ kt_smooth_follow_controller.py
 kt_smooth_follow_controller_v3.py
 kt_vlf_*.py
 
+# Local robot config (secrets / per-machine overrides)
+config/local.robot.ps1
+
 # Empty placeholder
 ssh

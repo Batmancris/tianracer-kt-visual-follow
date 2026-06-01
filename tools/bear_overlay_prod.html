@@ -233,9 +233,9 @@
 </head>
 <body>
   <div class="bar">
-    <label>Robot Host <input id="robot-host" value="10.217.185.241" style="width:180px"></label>
-    <label>Rosbridge <input id="ros-url" value="ws://10.217.185.241:9090" style="width:220px"></label>
-    <label>MJPEG URL <input id="mjpeg-url" value="http://10.217.185.241:8080/stream.mjpg" style="width:320px"></label>
+    <label>Robot Host <input id="robot-host" value="" style="width:180px"></label>
+    <label>Rosbridge <input id="ros-url" value="" style="width:220px"></label>
+    <label>MJPEG URL <input id="mjpeg-url" value="" style="width:320px"></label>
     <label>Image Source <input id="image-source" value="MJPEG Low Latency" readonly style="width:180px"></label>
     <button id="connect-btn">Connect</button>
     <button id="disconnect-btn">Disconnect</button>
@@ -401,8 +401,8 @@
   </div>
 
   <div class="footer-bar">
-    <span>MJPEG: <strong>http://10.217.185.241:8080/stream.mjpg</strong></span>
-    <span>Rosbridge: <strong>ws://10.217.185.241:9090</strong></span>
+    <span>MJPEG: <strong id="footer-mjpeg-url">-</strong></span>
+    <span>Rosbridge: <strong id="footer-ros-url">-</strong></span>
     <span>Targets: <strong>/bear_detection/targets</strong></span>
     <span>Follow Status: <strong>/kt_follow/status</strong></span>
     <span>Tuning Status: <strong>/kt_follow/tuning_status</strong></span>
@@ -411,6 +411,9 @@
 
   <script>
     const DEFAULT_HOST = '10.217.185.241';
+    const DEFAULT_ROSBRIDGE_PORT = 9090;
+    const DEFAULT_MJPEG_PORT = 8080;
+    const CONFIG_STORAGE_KEY = 'kt.overlay.connection.v1';
     const OVERLAY_DRAW_INTERVAL_MS = 100;
     const DOM_UPDATE_INTERVAL_MS = 200;
     const MJPEG_STATUS_POLL_MS = 1000;
@@ -435,6 +438,8 @@
     const robotHostInput = document.getElementById('robot-host');
     const rosUrlInput = document.getElementById('ros-url');
     const mjpegUrlInput = document.getElementById('mjpeg-url');
+    const footerRosUrl = document.getElementById('footer-ros-url');
+    const footerMjpegUrl = document.getElementById('footer-mjpeg-url');
     const previewImage = document.getElementById('previewImage');
     const overlay = document.getElementById('overlay');
     const ctx = overlay.getContext('2d');
@@ -566,17 +571,90 @@
       return new Date(timestamp).toLocaleTimeString();
     }
 
+    function parsePortValue(value, fallbackPort) {
+      const parsed = Number.parseInt(String(value || '').trim(), 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackPort;
+    }
+
+    function getUrlPortOrDefault(urlText, fallbackPort) {
+      if (!urlText) {
+        return fallbackPort;
+      }
+      try {
+        return parsePortValue(new URL(urlText, window.location.href).port, fallbackPort);
+      } catch (_error) {
+        return fallbackPort;
+      }
+    }
+
+    function inferHostFromLocation() {
+      const host = window.location.hostname || '';
+      if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+        return DEFAULT_HOST;
+      }
+      return host;
+    }
+
+    function readStoredConnectionConfig() {
+      try {
+        return JSON.parse(window.localStorage.getItem(CONFIG_STORAGE_KEY) || 'null');
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function getInitialConnectionConfig() {
+      const query = new URLSearchParams(window.location.search);
+      const stored = readStoredConnectionConfig();
+      const host = (query.get('robot') || (stored && stored.robotHost) || inferHostFromLocation() || DEFAULT_HOST).trim();
+      const rosbridgePort = parsePortValue(query.get('rosbridge') || (stored && stored.rosbridgePort), DEFAULT_ROSBRIDGE_PORT);
+      const mjpegPort = parsePortValue(query.get('mjpeg') || (stored && stored.mjpegPort), DEFAULT_MJPEG_PORT);
+      return {
+        robotHost: host || DEFAULT_HOST,
+        rosbridgePort,
+        mjpegPort,
+      };
+    }
+
+    function saveConnectionConfig() {
+      const host = robotHostInput.value.trim() || DEFAULT_HOST;
+      const rosUrl = rosUrlInput.value.trim();
+      const mjpegUrl = mjpegUrlInput.value.trim();
+      try {
+        const rosParsed = new URL(rosUrl);
+        const mjpegParsed = new URL(mjpegUrl);
+        window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify({
+          robotHost: host,
+          rosbridgePort: parsePortValue(rosParsed.port, DEFAULT_ROSBRIDGE_PORT),
+          mjpegPort: parsePortValue(mjpegParsed.port, DEFAULT_MJPEG_PORT),
+        }));
+      } catch (_error) {
+        // Ignore invalid manual URLs and keep the last valid persisted config.
+      }
+    }
+
+    function syncFooterFields() {
+      footerRosUrl.textContent = rosUrlInput.value.trim() || '-';
+      footerMjpegUrl.textContent = mjpegUrlInput.value.trim() || '-';
+    }
+
     function syncHostFields() {
       const host = robotHostInput.value.trim() || DEFAULT_HOST;
-      rosUrlInput.value = `ws://${host}:9090`;
-      mjpegUrlInput.value = `http://${host}:8080/stream.mjpg`;
+      const initialRosUrl = rosUrlInput.value.trim();
+      const initialMjpegUrl = mjpegUrlInput.value.trim();
+      const rosbridgePort = getUrlPortOrDefault(initialRosUrl, DEFAULT_ROSBRIDGE_PORT);
+      const mjpegPort = getUrlPortOrDefault(initialMjpegUrl, DEFAULT_MJPEG_PORT);
+      rosUrlInput.value = `ws://${host}:${rosbridgePort}`;
+      mjpegUrlInput.value = `http://${host}:${mjpegPort}/stream.mjpg`;
+      syncFooterFields();
+      saveConnectionConfig();
     }
 
     function buildMjpegStatusUrl() {
       const streamUrl = mjpegUrlInput.value.trim();
       if (!streamUrl) {
         const host = robotHostInput.value.trim() || DEFAULT_HOST;
-        return `http://${host}:8080/status.json`;
+        return `http://${host}:${DEFAULT_MJPEG_PORT}/status.json`;
       }
       try {
         const parsed = new URL(streamUrl, window.location.href);
@@ -586,7 +664,7 @@
         return parsed.toString();
       } catch (_error) {
         const host = robotHostInput.value.trim() || DEFAULT_HOST;
-        return `http://${host}:8080/status.json`;
+        return `http://${host}:${DEFAULT_MJPEG_PORT}/status.json`;
       }
     }
 
@@ -960,7 +1038,7 @@
 
     function buildStreamUrl() {
       const host = robotHostInput.value.trim() || DEFAULT_HOST;
-      const baseUrl = (mjpegUrlInput.value.trim() || `http://${host}:8080/stream.mjpg`).replace(/\?.*$/, '');
+      const baseUrl = (mjpegUrlInput.value.trim() || `http://${host}:${DEFAULT_MJPEG_PORT}/stream.mjpg`).replace(/\?.*$/, '');
       const separator = baseUrl.includes('?') ? '&' : '?';
       return `${baseUrl}${separator}t=${Date.now()}`;
     }
@@ -1362,12 +1440,16 @@
       }
     });
     rosUrlInput.addEventListener('change', () => {
+      syncFooterFields();
+      saveConnectionConfig();
       if (sessionDesiredOnline) {
         resetRosState(true);
         ensureRosConnection();
       }
     });
     mjpegUrlInput.addEventListener('change', () => {
+      syncFooterFields();
+      saveConnectionConfig();
       if (sessionDesiredOnline) {
         reconnectMjpegPreview('stream url changed');
       }
@@ -1393,8 +1475,12 @@
     });
     window.addEventListener('resize', drawOverlay);
 
-    robotHostInput.value = DEFAULT_HOST;
-    syncHostFields();
+    const initialConnectionConfig = getInitialConnectionConfig();
+    robotHostInput.value = initialConnectionConfig.robotHost;
+    rosUrlInput.value = `ws://${initialConnectionConfig.robotHost}:${initialConnectionConfig.rosbridgePort}`;
+    mjpegUrlInput.value = `http://${initialConnectionConfig.robotHost}:${initialConnectionConfig.mjpegPort}/stream.mjpg`;
+    syncFooterFields();
+    saveConnectionConfig();
     initTuningFields();
     initOverlayControls();
     setActionButtonsDisabled(true);
