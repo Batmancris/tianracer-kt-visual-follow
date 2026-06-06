@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KT Wireless Low-Latency Overlay</title>
+  <title>KT Visual Follow Console</title>
   <style>
     :root {
       --bg: #07131a;
-      --panel: rgba(16, 35, 46, 0.92);
-      --panel-2: rgba(19, 46, 60, 0.96);
+      --panel: rgba(16,35,46,0.92);
+      --panel-2: rgba(19,46,60,0.96);
       --line: #2f5f6d;
       --ink: #ecf4f2;
       --muted: #9ab8b8;
@@ -16,1476 +16,1239 @@
       --green: #98d96c;
       --amber: #e6bd58;
       --red: #d76b6b;
+      --blue-gray: #5a8a9a;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      height: 100vh; overflow: hidden;
       color: var(--ink);
       font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-      background:
-        radial-gradient(circle at top, rgba(40, 88, 96, 0.35), transparent 40%),
-        linear-gradient(180deg, #0a1d26, #07131a 58%);
+      font-size: 13px;
+      background: var(--bg);
     }
-    .bar, .mode-bar, .footer-bar {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      padding: 12px 16px;
-      flex-wrap: wrap;
+    /* --- Top Bar --- */
+    .topbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px;
+      background: rgba(7,18,25,0.95);
       border-bottom: 1px solid var(--line);
-      background: rgba(7, 18, 25, 0.9);
+      flex-wrap: nowrap;
+      height: 42px;
     }
-    .bar input, .bar button, .panel input, .panel button {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 8px 10px;
-      background: var(--panel);
-      color: var(--ink);
+    .topbar .title {
+      font-weight: 800; font-size: 14px;
+      color: var(--cyan); white-space: nowrap;
+      margin-right: 4px;
     }
-    .bar button, .mode-btn, .panel button {
-      cursor: pointer;
-      font-weight: 700;
+    .topbar label {
+      display: flex; align-items: center; gap: 4px;
+      white-space: nowrap;
     }
-    .layout {
+    .topbar input[type="text"], .topbar input[type="number"] {
+      border: 1px solid var(--line); border-radius: 6px;
+      padding: 4px 6px; background: var(--panel); color: var(--ink);
+      font-size: 12px; width: 160px;
+    }
+    .topbar input#ros-url { width: 200px; }
+    .topbar input#mjpeg-url { width: 260px; }
+    .topbar button {
+      border: 1px solid var(--line); border-radius: 6px;
+      padding: 5px 12px; background: var(--panel-2); color: var(--ink);
+      font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .topbar button:hover { background: var(--line); }
+    /* --- Badge Strip --- */
+    .badge-strip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 12px;
+      background: rgba(7,18,25,0.9);
+      border-bottom: 1px solid var(--line);
+      height: 30px;
+    }
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge.green  { background: rgba(152,217,108,0.18); color: var(--green); }
+    .badge.red    { background: rgba(215,107,107,0.18); color: var(--red); }
+    .badge.cyan   { background: rgba(113,216,215,0.14); color: var(--cyan); }
+    .badge.amber  { background: rgba(230,189,88,0.18); color: var(--amber); }
+    .badge.bgray  { background: rgba(90,138,154,0.18); color: var(--blue-gray); }
+    /* --- Main Layout --- */
+    .main-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
-      gap: 16px;
-      padding: 16px;
+      grid-template-columns: 70% 30%;
+      height: calc(100vh - 42px - 30px - 48px);
     }
-    .video-shell {
+    /* --- Left Video Area --- */
+    .video-area {
       position: relative;
-      min-height: 520px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
+      background: #000; overflow: hidden;
+      border-right: 1px solid var(--line);
     }
     .video-stage {
       position: relative;
-      width: min(100%, 480px);
-      aspect-ratio: 4 / 3;
+      width: 100%; height: 100%;
     }
-    #previewImage, #overlay {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: contain;
+    #previewImage {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: contain; display: block;
     }
     #overlay {
-      position: absolute;
-      inset: 0;
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
       pointer-events: none;
     }
+    .video-badge {
+      position: absolute; top: 8px; left: 8px;
+      display: flex; flex-direction: column; gap: 4px;
+      z-index: 10;
+    }
     .placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: var(--muted);
-      padding: 24px;
-      background: linear-gradient(180deg, rgba(10, 29, 38, 0.25), rgba(0, 0, 0, 0.72));
-      line-height: 1.6;
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; color: var(--muted);
+      padding: 24px; line-height: 1.6;
+      background: rgba(0,0,0,0.6);
+      z-index: 5;
     }
-    .side {
-      display: grid;
-      gap: 16px;
+    /* --- Right Panel --- */
+    .right-panel {
+      display: flex; flex-direction: column;
+      overflow-y: auto; overflow-x: hidden;
+      padding: 8px; gap: 8px;
+      background: rgba(7,18,25,0.6);
     }
-    .panel {
+    .card {
       border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 16px;
+      border-radius: 10px;
+      padding: 10px;
       background: var(--panel);
     }
-    .panel h2 {
-      margin: 0 0 12px;
-      font-size: 16px;
-    }
-    .banner {
-      border: 1px solid rgba(113, 216, 215, 0.35);
-      background: rgba(113, 216, 215, 0.12);
+    .card h3 {
+      margin: 0 0 6px; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.5px;
       color: var(--cyan);
-      border-radius: 12px;
-      padding: 10px 12px;
-      font-size: 13px;
-      font-weight: 700;
     }
     .kv {
       display: grid;
-      grid-template-columns: 138px 1fr;
-      gap: 8px;
-      margin-bottom: 8px;
-      font-size: 13px;
+      grid-template-columns: 110px 1fr;
+      gap: 4px; font-size: 12px;
       align-items: center;
+      margin-bottom: 2px;
     }
-    .label {
-      color: var(--muted);
+    .kv .label { color: var(--muted); }
+    .kv .value { font-family: Consolas, "Courier New", monospace; }
+    .hero-row {
+      display: flex; gap: 12px; margin-bottom: 4px;
     }
-    .hero-value {
-      font-size: 28px;
-      font-weight: 800;
-      line-height: 1.1;
-      color: var(--cyan);
+    .hero-box { flex: 1; }
+    .hero-val {
+      font-size: 22px; font-weight: 800;
+      line-height: 1.1; color: var(--cyan);
     }
-    .hero-sub {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 12px;
-    }
+    .hero-sub { font-size: 11px; color: var(--muted); }
     .pill {
-      display: inline-flex;
-      align-items: center;
-      min-height: 30px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-      background: rgba(113, 216, 215, 0.14);
-      color: var(--cyan);
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700;
+      background: rgba(113,216,215,0.14); color: var(--cyan);
     }
-    .pill.ok, .mode-btn.active.follow {
-      background: rgba(152, 217, 108, 0.18);
-      color: var(--green);
+    .pill.ok   { background: rgba(152,217,108,0.18); color: var(--green); }
+    .pill.warn { background: rgba(230,189,88,0.18); color: var(--amber); }
+    .pill.alert{ background: rgba(215,107,107,0.18); color: var(--red); }
+    .age-ok    { color: var(--cyan); }
+    .age-warn  { color: var(--amber); font-weight: 700; }
+    .age-alert { color: var(--red); font-weight: 700; }
+    .note { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    /* --- Sliders --- */
+    .slider-row {
+      display: grid; grid-template-columns: 90px 60px 1fr;
+      gap: 6px; align-items: center; font-size: 12px; margin-bottom: 3px;
     }
-    .pill.warn, .mode-btn.active.manual {
-      background: rgba(230, 189, 88, 0.18);
-      color: var(--amber);
+    .slider-row .sl { color: var(--muted); }
+    .slider-row input[type="number"] {
+      border: 1px solid var(--line); border-radius: 4px;
+      padding: 2px 4px; background: var(--panel); color: var(--ink);
+      font-size: 11px; width: 60px;
     }
-    .pill.alert, .mode-btn.active.off {
-      background: rgba(215, 107, 107, 0.18);
-      color: var(--red);
+    .slider-row input[type="range"] {
+      width: 100%; accent-color: var(--cyan);
     }
-    .mode-bar {
-      border-bottom: 1px solid var(--line);
+    /* --- Buttons --- */
+    .btn-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .btn {
+      border: 1px solid var(--line); border-radius: 6px;
+      padding: 5px 12px; background: var(--panel-2);
+      color: var(--ink); font-weight: 700; font-size: 12px;
+      cursor: pointer;
     }
-    .mode-btn {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 10px 18px;
-      background: var(--panel-2);
-      color: var(--ink);
+    .btn:hover { background: var(--line); }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn.apply-cam { border-color: var(--cyan); }
+    .btn.apply-tune{ border-color: var(--green); }
+    /* --- Bottom Action Bar --- */
+    .bottom-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      background: rgba(7,18,25,0.95);
+      border-top: 1px solid var(--line);
+      height: 48px;
     }
-    .range-grid {
-      display: grid;
-      gap: 12px;
+    .action-btn {
+      border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px 18px; background: var(--panel-2);
+      color: var(--ink); font-weight: 800; font-size: 13px;
+      cursor: pointer; white-space: nowrap;
     }
-    .range-row {
-      display: grid;
-      gap: 8px;
+    .action-btn:hover { background: var(--line); }
+    .action-btn.off-btn  { border-color: var(--red); color: var(--red); }
+    .action-btn.follow-btn{ border-color: var(--green); color: var(--green); }
+    .action-btn.check-btn{ border-color: var(--amber); color: var(--amber); }
+    .action-btn.stop-btn { border-color: var(--red); background: rgba(215,107,107,0.2); color: var(--red); }
+    .action-btn.stop-btn:hover { background: rgba(215,107,107,0.4); }
+    .bottom-bar .spacer { flex: 1; }
+    .bottom-bar .status-text { font-size: 11px; color: var(--muted); }
+    /* --- Safety Banner --- */
+    .safety-banner {
+      border: 1px solid rgba(215,107,107,0.4);
+      background: rgba(215,107,107,0.08);
+      border-radius: 8px; padding: 6px 8px;
+      font-size: 11px; color: var(--red);
+      line-height: 1.4;
     }
-    .range-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 13px;
-    }
-    .range-inputs {
-      display: grid;
-      grid-template-columns: 120px 1fr;
-      gap: 8px;
-      align-items: center;
-    }
-    .range-inputs input[type="range"] {
-      width: 100%;
-      accent-color: var(--cyan);
-    }
-    .button-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 6px;
-    }
-    .age-ok {
-      color: var(--cyan);
-    }
-    .age-warn {
-      color: var(--amber);
-      font-weight: 700;
-    }
-    .age-alert {
-      color: var(--red);
-      font-weight: 700;
-    }
-    .mono {
-      font-family: Consolas, "Courier New", monospace;
-      word-break: break-word;
-    }
-    .hint {
-      margin: 8px 0 0;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-    @media (max-width: 960px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
-      .video-shell {
-        min-height: 360px;
-      }
-    }
+    /* --- Mono --- */
+    .mono { font-family: Consolas, "Courier New", monospace; word-break: break-all; }
   </style>
   <script src="./roslib.min.js"></script>
 </head>
 <body>
-  <div class="bar">
-    <label>Robot Host <input id="robot-host" value="" style="width:180px"></label>
-    <label>Rosbridge <input id="ros-url" value="" style="width:220px"></label>
-    <label>MJPEG URL <input id="mjpeg-url" value="" style="width:320px"></label>
-    <label>Image Source <input id="image-source" value="MJPEG Low Latency" readonly style="width:180px"></label>
+  <!-- Top Bar -->
+  <div class="topbar">
+    <span class="title">KT Visual Follow Console</span>
+    <label>Robot IP <input type="text" id="robot-host" value="" placeholder="10.138.249.241"></label>
+    <label>Rosbridge <input type="text" id="ros-url" value="" placeholder="ws://..."></label>
+    <label>MJPEG <input type="text" id="mjpeg-url" value="" placeholder="http://..."></label>
     <button id="connect-btn">Connect</button>
     <button id="disconnect-btn">Disconnect</button>
   </div>
 
-  <div class="mode-bar">
-    <strong>Follow Mode</strong>
-    <button class="mode-btn follow" data-mode="FOLLOW">FOLLOW</button>
-    <button class="mode-btn manual" data-mode="MANUAL">MANUAL</button>
-    <button class="mode-btn off active" data-mode="OFF">OFF</button>
-    <span id="mode-state">mode=OFF</span>
+  <!-- Badge Strip -->
+  <div class="badge-strip">
+    <span id="badge-ros" class="badge cyan">ROS DISCONNECTED</span>
+    <span id="badge-dryrun" class="badge amber">DRY-RUN ONLY</span>
+    <span id="badge-mode" class="badge bgray">OFF</span>
+    <span id="badge-reason" class="badge bgray">-</span>
+    <span id="badge-session" class="badge bgray">OFFLINE</span>
   </div>
 
-  <div class="layout">
-    <div>
-      <div class="banner">Wireless Low-Latency Mode: continuous MJPEG preview + rosbridge small messages</div>
-      <div style="height: 12px;"></div>
-      <div class="video-shell">
-        <div class="video-stage">
-          <img id="previewImage" alt="KT MJPEG preview">
-          <canvas id="overlay"></canvas>
-        </div>
-        <div id="placeholder" class="placeholder">
-          Continuous MJPEG stream is the default wireless preview path.<br>
-          Rosbridge stays on targets, follow status, tuning status, camera status, and control messages.
-        </div>
+  <!-- Main Layout -->
+  <div class="main-layout">
+    <!-- Left: Video Area -->
+    <div class="video-area">
+      <div class="video-stage">
+        <img id="previewImage" alt="KT MJPEG preview">
+        <canvas id="overlay"></canvas>
+      </div>
+      <div id="placeholder" class="placeholder">
+        Click <b>Connect</b> to start MJPEG stream and rosbridge.<br>
+        Overlay: bear targets with centerline + crosshair + ROI label.
+      </div>
+      <div class="video-badge">
+        <span id="vid-badge-ros" class="badge cyan" style="font-size:10px;">ROS DISCONNECTED</span>
+        <span id="vid-badge-dryrun" class="badge amber" style="font-size:10px;">DRY-RUN</span>
+        <span id="vid-badge-follow" class="badge bgray" style="font-size:10px;">OFF</span>
       </div>
     </div>
 
-    <div class="side">
-      <div class="panel">
-        <h2>Demo Status</h2>
-        <div class="kv"><span class="label">rosbridge</span><span id="ros-status">idle</span></div>
-        <div class="kv"><span class="label">image mode</span><span id="image-mode-status">MJPEG Low Latency</span></div>
-        <div class="kv"><span class="label">target fps</span><span id="target-fps">0</span></div>
-        <div class="kv"><span class="label">overlay draw fps</span><span id="overlay-fps">0</span></div>
-        <div class="kv"><span class="label">follow status fps</span><span id="follow-status-fps">0</span></div>
-        <div class="kv"><span class="label">target count</span><span id="target-count">0</span></div>
-        <div class="kv"><span class="label">bear_ratio</span><span id="bear-ratio">0.00</span></div>
-        <div class="kv"><span class="label">nonempty_ratio</span><span id="nonempty-ratio">0.00</span></div>
-        <div class="kv"><span class="label">last bbox</span><span id="bbox-status">-</span></div>
+    <!-- Right Panel -->
+    <div class="right-panel" id="right-panel">
+      <!-- System Card -->
+      <div class="card">
+        <h3>System</h3>
+        <div class="kv"><span class="label">rosbridge</span><span id="s-ros" class="value">offline</span></div>
+        <div class="kv"><span class="label">camera</span><span id="s-camera" class="value">-</span></div>
+        <div class="kv"><span class="label">bear_det</span><span id="s-bear-det" class="value">-</span></div>
+        <div class="kv"><span class="label">lidar</span><span id="s-lidar" class="value">-</span></div>
+        <div class="kv"><span class="label">follow_v4</span><span id="s-follow" class="value">-</span></div>
+        <div class="kv"><span class="label">base</span><span id="s-base" class="value">-</span></div>
       </div>
 
-      <div class="panel">
-        <h2>MJPEG Status</h2>
-        <div class="kv"><span class="label">mjpeg state</span><span id="mjpeg-state">idle</span></div>
-        <div class="kv"><span class="label">mjpeg age ms</span><span id="mjpeg-age-ms">-</span></div>
-        <div class="kv"><span class="label">mjpeg source fps</span><span id="mjpeg-source-fps">-</span></div>
-        <div class="kv"><span class="label">client count</span><span id="mjpeg-client-count">-</span></div>
-        <div class="kv"><span class="label">skipped frames</span><span id="mjpeg-skipped">-</span></div>
-        <div class="kv"><span class="label">latest seq</span><span id="mjpeg-latest-seq">-</span></div>
-        <div class="kv"><span class="label">last reconnect reason</span><span id="mjpeg-reconnect-reason" class="mono">-</span></div>
-        <div class="kv"><span class="label">last reconnect time</span><span id="mjpeg-reconnect-time">-</span></div>
-        <div class="kv"><span class="label">last status poll</span><span id="mjpeg-status-age">-</span></div>
-        <p class="hint">The page polls <span class="mono">status.json</span> once per second. Overlay and DOM updates stay rate-limited on the browser side.</p>
+      <!-- Follow State Card -->
+      <div class="card">
+        <h3>Follow State</h3>
+        <div class="kv"><span class="label">mode</span><span id="fs-mode" class="value">-</span></div>
+        <div class="kv"><span class="label">enable_control</span><span id="fs-enable" class="value">-</span></div>
+        <div class="kv"><span class="label">publishing</span><span id="fs-publishing" class="value">-</span></div>
+        <div class="kv"><span class="label">reason</span><span id="fs-reason" class="value"><span class="pill">-</span></span></div>
+        <div class="kv"><span class="label">long_state</span><span id="fs-long" class="value">-</span></div>
+        <div class="kv"><span class="label">target_age_ms</span><span id="fs-target-age" class="value age-ok">-</span></div>
+        <div class="kv"><span class="label">scan_age_ms</span><span id="fs-scan-age" class="value age-ok">-</span></div>
+        <div class="kv"><span class="label">valid_scan_pts</span><span id="fs-scan-pts" class="value">-</span></div>
       </div>
 
-      <div class="panel">
-        <h2>Overlay Timing</h2>
-        <div class="range-grid">
-          <div class="range-row">
-            <div class="range-head"><span>overlay_delay_ms</span><span id="overlay-delay-value">80</span></div>
-            <div class="range-inputs">
-              <input id="overlay-delay-number" type="number" min="0" max="300" step="10" value="80">
-              <input id="overlay-delay-range" type="range" min="0" max="300" step="10" value="80">
-            </div>
-          </div>
-          <div class="range-row">
-            <div class="range-head"><span>target_hold_ms</span><span id="target-hold-value">250</span></div>
-            <div class="range-inputs">
-              <input id="target-hold-number" type="number" min="100" max="500" step="10" value="250">
-              <input id="target-hold-range" type="range" min="100" max="500" step="10" value="250">
-            </div>
-          </div>
+      <!-- Command Card -->
+      <div class="card">
+        <h3>Command</h3>
+        <div class="hero-row">
+          <div class="hero-box"><div class="hero-val" id="cmd-speed">-</div><div class="hero-sub">computed speed (m/s)</div></div>
+          <div class="hero-box"><div class="hero-val" id="cmd-steer">-</div><div class="hero-sub">computed steer (rad)</div></div>
         </div>
+        <div class="kv"><span class="label">published spd</span><span id="cmd-pub-speed" class="value">N/A</span></div>
+        <div class="kv"><span class="label">published str</span><span id="cmd-pub-steer" class="value">N/A</span></div>
+        <div class="kv"><span class="label">odom speed</span><span id="cmd-odom" class="value">-</span></div>
+        <div class="kv"><span class="label">actual steering</span><span id="cmd-actual-steer" class="value">N/A</span></div>
+        <div class="note">actual steering: base does not expose steering feedback topic yet</div>
+        <div class="note" style="margin-top:3px;">contract: /tianracer/ackermann_cmd when enabled; dry-run sends nothing</div>
       </div>
 
-      <div class="panel">
-        <h2>Demo Tuning</h2>
-        <div class="range-grid">
-          <div class="range-row">
-            <div class="range-head"><span>Brightness</span><span id="brightness-value">50</span></div>
-            <div class="range-inputs">
-              <input id="brightness-number" type="number" min="-64" max="64" step="1" value="50">
-              <input id="brightness-range" type="range" min="-64" max="64" step="1" value="50">
-            </div>
-          </div>
-          <div class="range-row">
-            <div class="range-head"><span>Exposure</span><span id="exposure-value">120</span></div>
-            <div class="range-inputs">
-              <input id="exposure-number" type="number" min="1" max="5000" step="1" value="120">
-              <input id="exposure-range" type="range" min="1" max="5000" step="1" value="120">
-            </div>
-          </div>
-          <div class="range-row">
-            <div class="range-head"><span>Max Speed</span><span id="max-speed-value">0.50</span></div>
-            <div class="range-inputs">
-              <input id="max-speed-number" type="number" min="0" max="0.60" step="0.01" value="0.50">
-              <input id="max-speed-range" type="range" min="0" max="0.60" step="0.01" value="0.50">
-            </div>
-          </div>
-          <div class="range-row">
-            <div class="range-head"><span>Max Steering Angle</span><span id="max-steering-value">0.30</span></div>
-            <div class="range-inputs">
-              <input id="max-steering-number" type="number" min="0" max="1.00" step="0.01" value="0.30">
-              <input id="max-steering-range" type="range" min="0" max="1.00" step="0.01" value="0.30">
-            </div>
-          </div>
-          <div class="range-row">
-            <div class="range-head"><span>Stop Distance</span><span id="stop-distance-value">0.50</span></div>
-            <div class="range-inputs">
-              <input id="stop-distance-number" type="number" min="0.20" max="1.50" step="0.01" value="0.50">
-              <input id="stop-distance-range" type="range" min="0.20" max="1.50" step="0.01" value="0.50">
-            </div>
-          </div>
-          <div class="range-row">
-            <div class="range-head"><span>Full Speed Distance</span><span id="full-speed-distance-value">1.00</span></div>
-            <div class="range-inputs">
-              <input id="full-speed-distance-number" type="number" min="0.30" max="3.00" step="0.01" value="1.00">
-              <input id="full-speed-distance-range" type="range" min="0.30" max="3.00" step="0.01" value="1.00">
-            </div>
-          </div>
-        </div>
-        <div class="button-row">
-          <button id="apply-camera-btn">Apply Camera</button>
-          <button id="apply-follow-btn">Apply Follow Tuning</button>
-          <button id="apply-all-btn">Apply All</button>
-        </div>
-        <div style="margin-top: 14px;">
-          <div class="kv"><span class="label">last camera apply</span><span id="camera-apply-status" class="mono">idle</span></div>
-          <div class="kv"><span class="label">last follow apply</span><span id="follow-apply-status" class="mono">idle</span></div>
-          <div class="kv"><span class="label">follow tuning status</span><span id="follow-tuning-status" class="mono">idle</span></div>
-          <div class="kv"><span class="label">camera backend</span><span id="camera-backend-status" class="mono">idle</span></div>
-        </div>
+      <!-- Camera Card -->
+      <div class="card">
+        <h3>Camera</h3>
+        <div class="slider-row"><span class="sl">brightness</span><input type="number" id="cam-brightness-num" min="-64" max="64" step="1" value="50"><input type="range" id="cam-brightness-rng" min="-64" max="64" step="1" value="50"></div>
+        <div class="slider-row"><span class="sl">exposure</span><input type="number" id="cam-exposure-num" min="1" max="5000" step="1" value="120"><input type="range" id="cam-exposure-rng" min="1" max="5000" step="1" value="120"></div>
+        <div class="kv"><span class="label">auto_exposure</span><span id="cam-auto" class="value">false</span></div>
+        <div class="btn-row"><button class="btn apply-cam" id="apply-camera-btn">Apply Camera</button></div>
+        <div class="kv" style="margin-top:4px;"><span class="label">status</span><span id="cam-status" class="value mono">idle</span></div>
       </div>
 
-      <div class="panel">
-        <h2>Follow Status</h2>
-        <div class="hero-value" id="follow-dist-filt">-</div>
-        <div class="hero-sub">dist_filt (m)</div>
-        <div style="height: 12px;"></div>
-        <div class="hero-value" id="follow-speed-cmd">-</div>
-        <div class="hero-sub">speed_cmd (m/s)</div>
-        <div style="height: 12px;"></div>
-        <div class="kv"><span class="label">steer_cmd</span><span id="follow-steer-cmd" class="hero-value" style="font-size:20px;">-</span></div>
-        <div class="kv"><span class="label">reason</span><span><span id="follow-reason" class="pill">-</span></span></div>
-        <div class="kv"><span class="label">mode</span><span id="follow-mode">-</span></div>
-        <div class="kv"><span class="label">scan_topic</span><span id="follow-scan-topic" class="mono">-</span></div>
-        <div class="kv"><span class="label">roi_cx / roi_cy</span><span id="follow-roi">-</span></div>
-        <div class="kv"><span class="label">theta_raw</span><span id="follow-theta-raw">-</span></div>
-        <div class="kv"><span class="label">theta_filt</span><span id="follow-theta-filt">-</span></div>
-        <div class="kv"><span class="label">dist_raw</span><span id="follow-dist-raw">-</span></div>
-        <div class="kv"><span class="label">valid_scan_pts</span><span id="follow-valid-scan">-</span></div>
-        <div class="kv"><span class="label">stop_distance_m</span><span id="follow-stop-distance">-</span></div>
-        <div class="kv"><span class="label">full_speed_distance_m</span><span id="follow-full-speed-distance">-</span></div>
-        <div class="kv"><span class="label">max_speed</span><span id="follow-max-speed">-</span></div>
-        <div class="kv"><span class="label">max_steering_angle</span><span id="follow-max-steering">-</span></div>
-        <div class="kv"><span class="label">target_age_ms</span><span id="follow-target-age" class="age-ok">-</span></div>
-        <div class="kv"><span class="label">scan_age_ms</span><span id="follow-scan-age" class="age-ok">-</span></div>
-        <div class="kv"><span class="label">status age</span><span id="follow-status-age">-</span></div>
+      <!-- Follow Tuning Card -->
+      <div class="card">
+        <h3>Follow Tuning</h3>
+        <div class="slider-row"><span class="sl">max_speed</span><input type="number" id="tune-max-speed-num" min="0" max="0.60" step="0.01" value="0.25"><input type="range" id="tune-max-speed-rng" min="0" max="0.60" step="0.01" value="0.25"></div>
+        <div class="slider-row"><span class="sl">max_steer</span><input type="number" id="tune-max-steer-num" min="0" max="1.00" step="0.01" value="0.18"><input type="range" id="tune-max-steer-rng" min="0" max="1.00" step="0.01" value="0.18"></div>
+        <div class="slider-row"><span class="sl">stop_dist</span><input type="number" id="tune-stop-num" min="0.20" max="1.50" step="0.01" value="0.50"><input type="range" id="tune-stop-rng" min="0.20" max="1.50" step="0.01" value="0.50"></div>
+        <div class="slider-row"><span class="sl">full_spd_dist</span><input type="number" id="tune-full-num" min="0.30" max="3.00" step="0.01" value="1.60"><input type="range" id="tune-full-rng" min="0.30" max="3.00" step="0.01" value="1.60"></div>
+        <div class="btn-row"><button class="btn apply-tune" id="apply-tuning-btn">Apply Tuning</button></div>
+        <div class="kv" style="margin-top:4px;"><span class="label">status</span><span id="tune-status" class="value mono">idle</span></div>
       </div>
-    </div>
+
+      <!-- Safety / Contract Card -->
+      <div class="card">
+        <h3>Safety</h3>
+        <div class="safety-banner">
+          <b>DRY-RUN ONLY</b> &mdash; enable_control=false. No /tianracer/ackermann_cmd published from this console.
+          STOP publishes /kt_follow/mode=OFF only.
+        </div>
+        <div class="kv" style="margin-top:6px;"><span class="label">dist_filt</span><span id="sv-dist" class="value">-</span></div>
+        <div class="kv"><span class="label">theta_filt</span><span id="sv-theta" class="value">-</span></div>
+        <div class="kv"><span class="label">roi_cx / cy</span><span id="sv-roi" class="value">-</span></div>
+        <div class="kv"><span class="label">v_odom</span><span id="sv-vodom" class="value">-</span></div>
+      </div>
+    </div> <!-- /right-panel -->
+  </div> <!-- /main-layout -->
+
+  <!-- Bottom Fixed Action Bar -->
+  <div class="bottom-bar">
+    <button class="action-btn off-btn" id="action-off">OFF</button>
+    <button class="action-btn follow-btn" id="action-follow">DRY-RUN FOLLOW</button>
+    <button class="action-btn check-btn" id="action-check">CHECK</button>
+    <button class="action-btn stop-btn" id="action-stop">STOP</button>
+    <span class="spacer"></span>
+    <span class="status-text" id="bottom-status">idle</span>
+    <span class="status-text">MJPEG: <b id="bottom-mjpeg">-</b></span>
+    <span class="status-text">Rosbridge: <b id="bottom-ros">-</b></span>
   </div>
+<script>
+  /* ============================================
+     Phase 4.9 — KT Visual Follow Console
+     Fragment 40: Constants, State, DOM Refs, Helpers
+     ============================================ */
 
-  <div class="footer-bar">
-    <span>MJPEG: <strong id="footer-mjpeg-url">-</strong></span>
-    <span>Rosbridge: <strong id="footer-ros-url">-</strong></span>
-    <span>Targets: <strong>/bear_detection/targets</strong></span>
-    <span>Follow Status: <strong>/kt_follow/status</strong></span>
-    <span>Tuning Status: <strong>/kt_follow/tuning_status</strong></span>
-    <span>Camera Status: <strong>/kt_camera/status</strong></span>
-  </div>
+  const DEFAULT_HOST = '10.138.249.241';
+  const DEFAULT_ROSBRIDGE_PORT = 9090;
+  const DEFAULT_MJPEG_PORT = 8080;
+  const CONFIG_KEY = 'kt.overlay.v49';
+  const OVERLAY_DRAW_MS = 100;
+  const DOM_UPDATE_MS = 200;
+  const MJPEG_POLL_MS = 1000;
+  const MJPEG_STALE_MS = 1000;
+  const MJPEG_SEQ_STALL = 2;
+  const MJPEG_NO_CLIENT = 2;
+  const MJPEG_RECONNECT_MIN_MS = 2000;
+  const CAM_AUTO_DELAY_MS = 250;
+  const SRC_W = 640, SRC_H = 480;
+  const TARGET_HIST = 40;
 
-  <script>
-    const DEFAULT_HOST = '10.217.185.241';
-    const DEFAULT_ROSBRIDGE_PORT = 9090;
-    const DEFAULT_MJPEG_PORT = 8080;
-    const CONFIG_STORAGE_KEY = 'kt.overlay.connection.v1';
-    const OVERLAY_DRAW_INTERVAL_MS = 100;
-    const DOM_UPDATE_INTERVAL_MS = 200;
-    const MJPEG_STATUS_POLL_MS = 1000;
-    const MJPEG_STALE_AGE_MS = 1000;
-    const MJPEG_UNCHANGED_SEQ_THRESHOLD = 2;
-    const MJPEG_NO_CLIENT_THRESHOLD = 2;
-    const MIN_MJPEG_RECONNECT_INTERVAL_MS = 2000;
-    const CAMERA_AUTO_APPLY_DELAY_MS = 250;
-    const OVERLAY_SOURCE_WIDTH = 640;
-    const OVERLAY_SOURCE_HEIGHT = 480;
-    const TARGET_HISTORY_LIMIT = 40;
-    const RATIO_HISTORY_LIMIT = 40;
+  const T_TOPICS = {
+    targets: '/bear_detection/targets',
+    status: '/kt_follow/status',
+    tuningStatus: '/kt_follow/tuning_status',
+    cameraStatus: '/kt_camera/status',
+    mode: '/kt_follow/mode',
+    tuning: '/kt_follow/tuning',
+    camera: '/kt_camera/control',
+  };
 
-    const TARGET_TOPIC_NAME = '/bear_detection/targets';
-    const FOLLOW_STATUS_TOPIC = '/kt_follow/status';
-    const FOLLOW_TUNING_STATUS_TOPIC = '/kt_follow/tuning_status';
-    const CAMERA_STATUS_TOPIC = '/kt_camera/status';
-    const FOLLOW_MODE_TOPIC = '/kt_follow/mode';
-    const FOLLOW_TUNING_TOPIC = '/kt_follow/tuning';
-    const CAMERA_CONTROL_TOPIC = '/kt_camera/control';
+  /* --- DOM Refs --- */
+  const $ = (id) => document.getElementById(id);
 
-    const robotHostInput = document.getElementById('robot-host');
-    const rosUrlInput = document.getElementById('ros-url');
-    const mjpegUrlInput = document.getElementById('mjpeg-url');
-    const footerRosUrl = document.getElementById('footer-ros-url');
-    const footerMjpegUrl = document.getElementById('footer-mjpeg-url');
-    const previewImage = document.getElementById('previewImage');
-    const overlay = document.getElementById('overlay');
-    const ctx = overlay.getContext('2d');
-    const placeholder = document.getElementById('placeholder');
+  // Top bar
+  const domHost    = $('robot-host');
+  const domRosUrl  = $('ros-url');
+  const domMjpegUrl= $('mjpeg-url');
+  const domConnect = $('connect-btn');
+  const domDisconnect = $('disconnect-btn');
 
-    const rosStatus = document.getElementById('ros-status');
-    const imageModeStatus = document.getElementById('image-mode-status');
-    const targetFpsEl = document.getElementById('target-fps');
-    const overlayFpsEl = document.getElementById('overlay-fps');
-    const followStatusFpsEl = document.getElementById('follow-status-fps');
-    const targetCountEl = document.getElementById('target-count');
-    const bearRatioEl = document.getElementById('bear-ratio');
-    const nonemptyRatioEl = document.getElementById('nonempty-ratio');
-    const bboxStatusEl = document.getElementById('bbox-status');
+  // Badges
+  const domBadgeRos    = $('badge-ros');
+  const domBadgeDryrun = $('badge-dryrun');
+  const domBadgeMode   = $('badge-mode');
+  const domBadgeReason = $('badge-reason');
+  const domBadgeSession= $('badge-session');
 
-    const mjpegAgeMsEl = document.getElementById('mjpeg-age-ms');
-    const mjpegSourceFpsEl = document.getElementById('mjpeg-source-fps');
-    const mjpegClientCountEl = document.getElementById('mjpeg-client-count');
-    const mjpegSkippedEl = document.getElementById('mjpeg-skipped');
-    const mjpegLatestSeqEl = document.getElementById('mjpeg-latest-seq');
-    const mjpegStatusAgeEl = document.getElementById('mjpeg-status-age');
-    const mjpegStateEl = document.getElementById('mjpeg-state');
-    const mjpegReconnectReasonEl = document.getElementById('mjpeg-reconnect-reason');
-    const mjpegReconnectTimeEl = document.getElementById('mjpeg-reconnect-time');
+  // Video badges
+  const domVidRos    = $('vid-badge-ros');
+  const domVidDryrun = $('vid-badge-dryrun');
+  const domVidFollow = $('vid-badge-follow');
 
-    const overlayDelayNumber = document.getElementById('overlay-delay-number');
-    const overlayDelayRange = document.getElementById('overlay-delay-range');
-    const overlayDelayValue = document.getElementById('overlay-delay-value');
-    const targetHoldNumber = document.getElementById('target-hold-number');
-    const targetHoldRange = document.getElementById('target-hold-range');
-    const targetHoldValue = document.getElementById('target-hold-value');
+  // Video
+  const domPreview = $('previewImage');
+  const domOverlay = $('overlay');
+  const ctx = domOverlay.getContext('2d');
+  const domPlaceholder = $('placeholder');
 
-    const modeState = document.getElementById('mode-state');
-    const cameraApplyStatus = document.getElementById('camera-apply-status');
-    const followApplyStatus = document.getElementById('follow-apply-status');
-    const followTuningStatus = document.getElementById('follow-tuning-status');
-    const cameraBackendStatus = document.getElementById('camera-backend-status');
+  // System
+  const domSRos     = $('s-ros');
+  const domSCamera  = $('s-camera');
+  const domSBearDet = $('s-bear-det');
+  const domSLidar   = $('s-lidar');
+  const domSFollow  = $('s-follow');
+  const domSBase    = $('s-base');
 
-    const followDistFilt = document.getElementById('follow-dist-filt');
-    const followSpeedCmd = document.getElementById('follow-speed-cmd');
-    const followSteerCmd = document.getElementById('follow-steer-cmd');
-    const followReason = document.getElementById('follow-reason');
-    const followMode = document.getElementById('follow-mode');
-    const followScanTopic = document.getElementById('follow-scan-topic');
-    const followRoi = document.getElementById('follow-roi');
-    const followThetaRaw = document.getElementById('follow-theta-raw');
-    const followThetaFilt = document.getElementById('follow-theta-filt');
-    const followDistRaw = document.getElementById('follow-dist-raw');
-    const followValidScan = document.getElementById('follow-valid-scan');
-    const followStopDistance = document.getElementById('follow-stop-distance');
-    const followFullSpeedDistance = document.getElementById('follow-full-speed-distance');
-    const followMaxSpeed = document.getElementById('follow-max-speed');
-    const followMaxSteering = document.getElementById('follow-max-steering');
-    const followTargetAge = document.getElementById('follow-target-age');
-    const followScanAge = document.getElementById('follow-scan-age');
-    const followStatusAge = document.getElementById('follow-status-age');
+  // Follow State
+  const domFSMode    = $('fs-mode');
+  const domFSEnable  = $('fs-enable');
+  const domFSPublish = $('fs-publishing');
+  const domFSReason  = $('fs-reason');
+  const domFSLong    = $('fs-long');
+  const domFSTargetAge = $('fs-target-age');
+  const domFSScanAge = $('fs-scan-age');
+  const domFSScanPts = $('fs-scan-pts');
 
-    const tuningFields = [
-      { numberId: 'brightness-number', rangeId: 'brightness-range', valueId: 'brightness-value', min: -64, max: 64, digits: 0 },
-      { numberId: 'exposure-number', rangeId: 'exposure-range', valueId: 'exposure-value', min: 1, max: 5000, digits: 0 },
-      { numberId: 'max-speed-number', rangeId: 'max-speed-range', valueId: 'max-speed-value', min: 0, max: 0.6, digits: 2 },
-      { numberId: 'max-steering-number', rangeId: 'max-steering-range', valueId: 'max-steering-value', min: 0, max: 1.0, digits: 2 },
-      { numberId: 'stop-distance-number', rangeId: 'stop-distance-range', valueId: 'stop-distance-value', min: 0.2, max: 1.5, digits: 2 },
-      { numberId: 'full-speed-distance-number', rangeId: 'full-speed-distance-range', valueId: 'full-speed-distance-value', min: 0.3, max: 3.0, digits: 2 },
-    ];
-    const cameraFieldPrefixes = ['brightness', 'exposure'];
-    const followTuningFieldPrefixes = ['max-speed', 'max-steering', 'stop-distance', 'full-speed-distance'];
+  // Command
+  const domCmdSpeed      = $('cmd-speed');
+  const domCmdSteer      = $('cmd-steer');
+  const domCmdPubSpeed   = $('cmd-pub-speed');
+  const domCmdPubSteer   = $('cmd-pub-steer');
+  const domCmdOdom       = $('cmd-odom');
+  const domCmdActualSteer= $('cmd-actual-steer');
 
-    let ros = null;
-    let rosConnectionState = 'offline';
-    let modeTopic = null;
-    let tuningTopic = null;
-    let cameraControlTopic = null;
-    let targetTopic = null;
-    let followStatusTopic = null;
-    let followTuningStatusTopic = null;
-    let cameraStatusTopic = null;
-    let sessionState = 'offline';
-    let sessionDesiredOnline = false;
-    let mjpegRunning = false;
-    let mjpegWatchdogTimer = 0;
-    let mjpegReconnectTimer = 0;
-    let cameraAutoApplyTimer = 0;
-    let mjpegStatusPollInFlight = false;
-    let mjpegStatusSeqStallCount = 0;
-    let mjpegNoClientCount = 0;
-    let lastObservedMjpegSeq = null;
-    let lastReconnectReason = '-';
-    let lastReconnectTime = 0;
-    let lastMjpegConnectAt = 0;
+  // Camera sliders
+  const domCamBNum = $('cam-brightness-num');
+  const domCamBRng = $('cam-brightness-rng');
+  const domCamENum = $('cam-exposure-num');
+  const domCamERng = $('cam-exposure-rng');
+  const domCamAuto = $('cam-auto');
+  const domCamBtn  = $('apply-camera-btn');
+  const domCamStat = $('cam-status');
 
-    let targetFrames = 0;
-    let overlayDrawFrames = 0;
-    let followStatusFrames = 0;
+  // Follow Tuning sliders
+  const domTuneMSNum = $('tune-max-speed-num');
+  const domTuneMSRng = $('tune-max-speed-rng');
+  const domTuneMTNum = $('tune-max-steer-num');
+  const domTuneMTRng = $('tune-max-steer-rng');
+  const domTuneSDNum = $('tune-stop-num');
+  const domTuneSDRng = $('tune-stop-rng');
+  const domTuneFDNum = $('tune-full-num');
+  const domTuneFDRng = $('tune-full-rng');
+  const domTuneBtn   = $('apply-tuning-btn');
+  const domTuneStat  = $('tune-status');
 
-    let latestFollowStatus = null;
-    let latestFollowStatusAt = 0;
-    let latestMjpegStatus = null;
-    let latestMjpegStatusAt = 0;
-    const cameraDirtyFields = new Set();
-    const tuningDirtyFields = new Set();
+  // Safety
+  const domSVDist  = $('sv-dist');
+  const domSVTheta = $('sv-theta');
+  const domSVRoi   = $('sv-roi');
+  const domSVVodom = $('sv-vodom');
 
-    let targetHistory = [];
-    let ratioHistory = [];
+  // Bottom bar
+  const domActionOff    = $('action-off');
+  const domActionFollow = $('action-follow');
+  const domActionCheck  = $('action-check');
+  const domActionStop   = $('action-stop');
+  const domBottomStatus = $('bottom-status');
+  const domBottomMjpeg  = $('bottom-mjpeg');
+  const domBottomRos    = $('bottom-ros');
 
-    function clamp(value, low, high) {
-      return Math.min(high, Math.max(low, value));
+  /* --- Global State --- */
+  let ros = null;
+  let rosState = 'offline';       // offline | connecting | connected | error
+  let sessionState = 'offline';   // offline | connecting | live | stale | error
+  let desiredOnline = false;
+  let mjpegRunning = false;
+  let mjpegReconnectTimer = 0;
+  let mjpegWatchdogTimer = 0;
+  let camAutoTimer = 0;
+  let mjpegPollInFlight = false;
+  let seqStallCount = 0;
+  let noClientCount = 0;
+  let lastSeq = null;
+  let lastReconnectReason = '-';
+  let lastReconnectTime = 0;
+  let lastMjpegConnectAt = 0;
+
+  // Topics
+  let tMode = null, tTuning = null, tCamera = null;
+  let tTargets = null, tStatus = null, tTuningStat = null, tCameraStat = null;
+
+  // Counters
+  let targetFrames = 0, overlayFrames = 0, statusFrames = 0;
+
+  // Latest data
+  let latestStatus = null;
+  let latestStatusAt = 0;
+  let latestMjpegStatus = null;
+  let latestMjpegStatusAt = 0;
+  let targetHistory = [];
+  let camDirty = new Set();
+  let tuneDirty = new Set();
+
+  /* --- Helpers --- */
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  function fmt(v, d = 3) { return Number.isFinite(+v) ? (+v).toFixed(d) : '-'; }
+  function fmtInt(v) { return Number.isFinite(+v) ? String(Math.round(+v)) : '-'; }
+  function fmtAge(start) {
+    if (!Number.isFinite(start) || start <= 0) return '-';
+    return Math.max(0, Math.round(performance.now() - start)) + ' ms';
+  }
+  function fmtClock(ts) {
+    if (!Number.isFinite(ts) || ts <= 0) return '-';
+    return new Date(ts).toLocaleTimeString();
+  }
+  function parsePort(v, fb) {
+    const n = Number.parseInt(String(v || '').trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : fb;
+  }
+  function inferHost() {
+    const h = window.location.hostname || '';
+    if (!h || h === 'localhost' || h === '127.0.0.1' || h === '::1') return DEFAULT_HOST;
+    return h;
+  }
+  function loadConfig() {
+    try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null'); } catch { return null; }
+  }
+  function saveConfig() {
+    try {
+      const u1 = new URL(domRosUrl.value || 'http://x:9090', location.href);
+      const u2 = new URL(domMjpegUrl.value || 'http://x:8080', location.href);
+      localStorage.setItem(CONFIG_KEY, JSON.stringify({
+        host: domHost.value.trim() || DEFAULT_HOST,
+        rosPort: parsePort(u1.port, DEFAULT_ROSBRIDGE_PORT),
+        mjpegPort: parsePort(u2.port, DEFAULT_MJPEG_PORT),
+      }));
+    } catch {}
+  }
+  function inferFollowStatus() {
+    // Determine follow_v4 / base / lidar / bear_det from status data
+    const now = Date.now();
+    if (!latestStatus) return '-';
+    const age = latestStatusAt > 0 ? (performance.now() - latestStatusAt) : 9999;
+    return age < 2000 ? 'active' : 'stale';
+  }
+  function syncUrls() {
+    const host = domHost.value.trim() || DEFAULT_HOST;
+    domRosUrl.value = `ws://${host}:${DEFAULT_ROSBRIDGE_PORT}`;
+    domMjpegUrl.value = `http://${host}:${DEFAULT_MJPEG_PORT}/stream.mjpg`;
+    domBottomRos.textContent = domRosUrl.value;
+    domBottomMjpeg.textContent = domMjpegUrl.value;
+    saveConfig();
+  }
+  function buildMjpegStatusUrl() {
+    try {
+      const u = new URL(domMjpegUrl.value || '', location.href);
+      u.pathname = '/status.json'; u.search = ''; u.hash = '';
+      return u.toString();
+    } catch {
+      return `http://${domHost.value.trim() || DEFAULT_HOST}:${DEFAULT_MJPEG_PORT}/status.json`;
     }
+  }
+  function buildStreamUrl() {
+    const base = (domMjpegUrl.value || '').replace(/\?.*$/, '');
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}t=${Date.now()}`;
+  }
+  function setAgeClass(el, ms) {
+    el.className = 'value age-ok';
+    if (+ms > 500) el.className = 'value age-alert';
+    else if (+ms > 200) el.className = 'value age-warn';
+  }
+  /* ============================================
+     Fragment 50: ROS Bridge Connection & Subscriptions
+     ============================================ */
 
-    function formatNumber(value, digits = 3) {
-      return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '-';
-    }
+  function clearTopics() {
+    [tTargets, tStatus, tTuningStat, tCameraStat].forEach(t => { try { t && t.unsubscribe(); } catch {} });
+    tMode = tTuning = tCamera = tTargets = tStatus = tTuningStat = tCameraStat = null;
+  }
 
-    function formatInteger(value) {
-      return Number.isFinite(Number(value)) ? String(Math.round(Number(value))) : '-';
-    }
+  function setRosBadge(txt, color) {
+    domBadgeRos.textContent = txt;
+    domBadgeRos.className = `badge ${color}`;
+    domVidRos.textContent = txt;
+    domVidRos.className = `badge ${color}`;
+    domSRos.textContent = txt;
+    domSRos.style.color = color === 'green' ? 'var(--green)' : color === 'red' ? 'var(--red)' : 'var(--ink)';
+  }
 
-    function formatAgeFromPerf(startAt) {
-      if (!Number.isFinite(startAt) || startAt <= 0) {
-        return '-';
-      }
-      return `${Math.max(0, Math.round(performance.now() - startAt))} ms`;
-    }
+  function setSessionBadge(txt, color) {
+    domBadgeSession.textContent = txt;
+    domBadgeSession.className = `badge ${color}`;
+    domBottomStatus.textContent = txt;
+  }
 
-    function formatWallClock(timestamp) {
-      if (!Number.isFinite(timestamp) || timestamp <= 0) {
-        return '-';
-      }
-      return new Date(timestamp).toLocaleTimeString();
-    }
+  function resetRos(close) {
+    clearTopics();
+    if (camAutoTimer) { clearTimeout(camAutoTimer); camAutoTimer = 0; }
+    camDirty.clear(); tuneDirty.clear();
+    if (close && ros) { try { ros.close(); } catch {} }
+    ros = null; rosState = 'offline';
+    setRosBadge('ROS DISCONNECTED', 'red');
+    domCamBtn.disabled = true;
+    domTuneBtn.disabled = true;
+  }
 
-    function parsePortValue(value, fallbackPort) {
-      const parsed = Number.parseInt(String(value || '').trim(), 10);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackPort;
-    }
+  function stopMjpeg(clearStat) {
+    mjpegRunning = false;
+    if (mjpegReconnectTimer) { clearTimeout(mjpegReconnectTimer); mjpegReconnectTimer = 0; }
+    domPreview.src = ''; domPreview.removeAttribute('src');
+    if (clearStat) { latestMjpegStatus = null; latestMjpegStatusAt = 0; seqStallCount = 0; noClientCount = 0; lastSeq = null; }
+    domPlaceholder.style.display = 'flex';
+  }
 
-    function getUrlPortOrDefault(urlText, fallbackPort) {
-      if (!urlText) {
-        return fallbackPort;
-      }
-      try {
-        return parsePortValue(new URL(urlText, window.location.href).port, fallbackPort);
-      } catch (_error) {
-        return fallbackPort;
-      }
-    }
+  function startMjpeg() {
+    if (!desiredOnline || mjpegRunning) return;
+    if (!['offline','stale','error','reconnecting','connecting'].includes(sessionState)) return;
+    lastMjpegConnectAt = Date.now();
+    mjpegRunning = true;
+    placeholder.style.display = 'flex';
+    domPreview.src = buildStreamUrl();
+    if (sessionState !== 'reconnecting') setSession('connecting');
+  }
 
-    function inferHostFromLocation() {
-      const host = window.location.hostname || '';
-      if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-        return DEFAULT_HOST;
-      }
-      return host;
-    }
+  function reconnectMjpeg(reason) {
+    if (!desiredOnline) return;
+    lastReconnectReason = reason;
+    lastReconnectTime = Date.now();
+    if (mjpegReconnectTimer) return;
+    setSession('reconnecting');
+    stopMjpeg(false);
+    const wait = Math.max(0, MJPEG_RECONNECT_MIN_MS - (Date.now() - lastMjpegConnectAt));
+    mjpegReconnectTimer = setTimeout(() => {
+      mjpegReconnectTimer = 0;
+      if (desiredOnline) startMjpeg();
+    }, wait);
+  }
 
-    function readStoredConnectionConfig() {
-      try {
-        return JSON.parse(window.localStorage.getItem(CONFIG_STORAGE_KEY) || 'null');
-      } catch (_error) {
-        return null;
-      }
-    }
+  function isMjpegStale(st) {
+    if (!st) return false;
+    const age = +st.last_frame_age_ms;
+    const stale = Number.isFinite(age) && age > MJPEG_STALE_MS;
+    const seq = Number.isFinite(+st.latest_seq) && seqStallCount >= MJPEG_SEQ_STALL;
+    return stale || seq;
+  }
 
-    function getInitialConnectionConfig() {
-      const query = new URLSearchParams(window.location.search);
-      const stored = readStoredConnectionConfig();
-      const host = (query.get('robot') || (stored && stored.robotHost) || inferHostFromLocation() || DEFAULT_HOST).trim();
-      const rosbridgePort = parsePortValue(query.get('rosbridge') || (stored && stored.rosbridgePort), DEFAULT_ROSBRIDGE_PORT);
-      const mjpegPort = parsePortValue(query.get('mjpeg') || (stored && stored.mjpegPort), DEFAULT_MJPEG_PORT);
-      return {
-        robotHost: host || DEFAULT_HOST,
-        rosbridgePort,
-        mjpegPort,
-      };
-    }
+  function scheduleWatchdog(imm) {
+    if (mjpegWatchdogTimer) { clearTimeout(mjpegWatchdogTimer); mjpegWatchdogTimer = 0; }
+    if (!desiredOnline) return;
+    mjpegWatchdogTimer = setTimeout(watchdogLoop, imm ? 0 : MJPEG_POLL_MS);
+  }
 
-    function saveConnectionConfig() {
-      const host = robotHostInput.value.trim() || DEFAULT_HOST;
-      const rosUrl = rosUrlInput.value.trim();
-      const mjpegUrl = mjpegUrlInput.value.trim();
-      try {
-        const rosParsed = new URL(rosUrl);
-        const mjpegParsed = new URL(mjpegUrl);
-        window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify({
-          robotHost: host,
-          rosbridgePort: parsePortValue(rosParsed.port, DEFAULT_ROSBRIDGE_PORT),
-          mjpegPort: parsePortValue(mjpegParsed.port, DEFAULT_MJPEG_PORT),
-        }));
-      } catch (_error) {
-        // Ignore invalid manual URLs and keep the last valid persisted config.
-      }
-    }
-
-    function syncFooterFields() {
-      footerRosUrl.textContent = rosUrlInput.value.trim() || '-';
-      footerMjpegUrl.textContent = mjpegUrlInput.value.trim() || '-';
-    }
-
-    function syncHostFields() {
-      const host = robotHostInput.value.trim() || DEFAULT_HOST;
-      const initialRosUrl = rosUrlInput.value.trim();
-      const initialMjpegUrl = mjpegUrlInput.value.trim();
-      const rosbridgePort = getUrlPortOrDefault(initialRosUrl, DEFAULT_ROSBRIDGE_PORT);
-      const mjpegPort = getUrlPortOrDefault(initialMjpegUrl, DEFAULT_MJPEG_PORT);
-      rosUrlInput.value = `ws://${host}:${rosbridgePort}`;
-      mjpegUrlInput.value = `http://${host}:${mjpegPort}/stream.mjpg`;
-      syncFooterFields();
-      saveConnectionConfig();
-    }
-
-    function buildMjpegStatusUrl() {
-      const streamUrl = mjpegUrlInput.value.trim();
-      if (!streamUrl) {
-        const host = robotHostInput.value.trim() || DEFAULT_HOST;
-        return `http://${host}:${DEFAULT_MJPEG_PORT}/status.json`;
-      }
-      try {
-        const parsed = new URL(streamUrl, window.location.href);
-        parsed.pathname = '/status.json';
-        parsed.search = '';
-        parsed.hash = '';
-        return parsed.toString();
-      } catch (_error) {
-        const host = robotHostInput.value.trim() || DEFAULT_HOST;
-        return `http://${host}:${DEFAULT_MJPEG_PORT}/status.json`;
-      }
-    }
-
-    function setSessionState(nextState) {
-      sessionState = nextState;
-      mjpegStateEl.textContent = nextState;
-    }
-
-    function resetMjpegSequenceTracking() {
-      mjpegStatusSeqStallCount = 0;
-      mjpegNoClientCount = 0;
-      lastObservedMjpegSeq = null;
-    }
-
-    function clearRosTopics() {
-      if (targetTopic) {
-        targetTopic.unsubscribe();
-      }
-      if (followStatusTopic) {
-        followStatusTopic.unsubscribe();
-      }
-      if (followTuningStatusTopic) {
-        followTuningStatusTopic.unsubscribe();
-      }
-      if (cameraStatusTopic) {
-        cameraStatusTopic.unsubscribe();
-      }
-      modeTopic = null;
-      tuningTopic = null;
-      cameraControlTopic = null;
-      targetTopic = null;
-      followStatusTopic = null;
-      followTuningStatusTopic = null;
-      cameraStatusTopic = null;
-    }
-
-    function isMjpegStatusStale(status) {
-      if (!status) {
-        return false;
-      }
-      const frameAge = Number(status.last_frame_age_ms);
-      const latestSeq = Number(status.latest_seq);
-      const staleByAge = Number.isFinite(frameAge) && frameAge > MJPEG_STALE_AGE_MS;
-      const staleBySeq = Number.isFinite(latestSeq) && mjpegStatusSeqStallCount >= MJPEG_UNCHANGED_SEQ_THRESHOLD;
-      return staleByAge || staleBySeq;
-    }
-
-    function syncField(field, source) {
-      const numberInput = document.getElementById(field.numberId);
-      const rangeInput = document.getElementById(field.rangeId);
-      const valueLabel = document.getElementById(field.valueId);
-      const rawValue = source === 'range' ? rangeInput.value : numberInput.value;
-      const safeValue = clamp(Number(rawValue), field.min, field.max);
-      const displayValue = field.digits > 0 ? safeValue.toFixed(field.digits) : String(Math.round(safeValue));
-      numberInput.value = displayValue;
-      rangeInput.value = String(safeValue);
-      valueLabel.textContent = displayValue;
-    }
-
-    function initTuningFields() {
-      tuningFields.forEach((field) => {
-        const numberInput = document.getElementById(field.numberId);
-        const rangeInput = document.getElementById(field.rangeId);
-        const fieldPrefix = field.numberId.replace(/-number$/, '');
-        numberInput.addEventListener('input', () => {
-          syncField(field, 'number');
-          if (cameraFieldPrefixes.includes(fieldPrefix)) {
-            cameraDirtyFields.add(fieldPrefix);
-            scheduleCameraAutoApply();
-          }
-          if (followTuningFieldPrefixes.includes(fieldPrefix)) {
-            tuningDirtyFields.add(fieldPrefix);
-          }
-        });
-        rangeInput.addEventListener('input', () => {
-          syncField(field, 'range');
-          if (cameraFieldPrefixes.includes(fieldPrefix)) {
-            cameraDirtyFields.add(fieldPrefix);
-            scheduleCameraAutoApply();
-          }
-          if (followTuningFieldPrefixes.includes(fieldPrefix)) {
-            tuningDirtyFields.add(fieldPrefix);
-          }
-        });
-        syncField(field, 'number');
-      });
-    }
-
-    function scheduleCameraAutoApply() {
-      if (cameraAutoApplyTimer) {
-        window.clearTimeout(cameraAutoApplyTimer);
-      }
-      cameraAutoApplyTimer = window.setTimeout(() => {
-        cameraAutoApplyTimer = 0;
-        if (rosConnectionState === 'connected') {
-          applyCamera();
+  function watchdogLoop() {
+    if (!desiredOnline) return;
+    if (mjpegPollInFlight) { scheduleWatchdog(false); return; }
+    mjpegPollInFlight = true;
+    fetch(buildMjpegStatusUrl(), { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(st => {
+        latestMjpegStatus = st;
+        latestMjpegStatusAt = performance.now();
+        const seq = +st.latest_seq;
+        if (Number.isFinite(seq)) {
+          if (lastSeq === seq) seqStallCount++; else { lastSeq = seq; seqStallCount = 0; }
         }
-      }, CAMERA_AUTO_APPLY_DELAY_MS);
-    }
-
-    function setTuningFieldValue(fieldIdPrefix, value) {
-      if (!Number.isFinite(Number(value))) {
-        return;
-      }
-      const numberInput = document.getElementById(`${fieldIdPrefix}-number`);
-      const rangeInput = document.getElementById(`${fieldIdPrefix}-range`);
-      const valueLabel = document.getElementById(`${fieldIdPrefix}-value`);
-      if (!numberInput || !rangeInput || !valueLabel) {
-        return;
-      }
-      const safeValue = Number(value);
-      const digits = ['max-speed', 'max-steering', 'stop-distance', 'full-speed-distance'].includes(fieldIdPrefix) ? 2 : 0;
-      const displayValue = safeValue.toFixed(digits);
-      numberInput.value = displayValue;
-      rangeInput.value = displayValue;
-      valueLabel.textContent = displayValue;
-    }
-
-    function syncPair(numberInput, rangeInput, valueLabel, min, max) {
-      const safeValue = clamp(Number(numberInput.value), min, max);
-      numberInput.value = String(Math.round(safeValue));
-      rangeInput.value = String(Math.round(safeValue));
-      valueLabel.textContent = String(Math.round(safeValue));
-    }
-
-    function initOverlayControls() {
-      const updateOverlayDelayFromNumber = () => syncPair(overlayDelayNumber, overlayDelayRange, overlayDelayValue, 0, 300);
-      const updateOverlayDelayFromRange = () => {
-        overlayDelayNumber.value = overlayDelayRange.value;
-        overlayDelayValue.textContent = overlayDelayRange.value;
-      };
-      const updateTargetHoldFromNumber = () => syncPair(targetHoldNumber, targetHoldRange, targetHoldValue, 100, 500);
-      const updateTargetHoldFromRange = () => {
-        targetHoldNumber.value = targetHoldRange.value;
-        targetHoldValue.textContent = targetHoldRange.value;
-      };
-      overlayDelayNumber.addEventListener('input', updateOverlayDelayFromNumber);
-      overlayDelayRange.addEventListener('input', updateOverlayDelayFromRange);
-      targetHoldNumber.addEventListener('input', updateTargetHoldFromNumber);
-      targetHoldRange.addEventListener('input', updateTargetHoldFromRange);
-      updateOverlayDelayFromNumber();
-      updateTargetHoldFromNumber();
-    }
-
-    function getOverlayDelayMs() {
-      return clamp(Number(overlayDelayNumber.value), 0, 300);
-    }
-
-    function getTargetHoldMs() {
-      return clamp(Number(targetHoldNumber.value), 100, 500);
-    }
-
-    function resizeOverlay() {
-      const rect = previewImage.getBoundingClientRect();
-      overlay.width = rect.width || 640;
-      overlay.height = rect.height || 480;
-    }
-
-    function pushRatioSample(totalTargets, bearTargets, hasBox) {
-      ratioHistory.push({
-        bearRatio: totalTargets > 0 ? bearTargets / totalTargets : 0,
-        nonempty: hasBox ? 1 : 0,
-      });
-      if (ratioHistory.length > RATIO_HISTORY_LIMIT) {
-        ratioHistory.shift();
-      }
-    }
-
-    function averageRatio(key) {
-      if (!ratioHistory.length) {
-        return 0;
-      }
-      const sum = ratioHistory.reduce((acc, item) => acc + Number(item[key] || 0), 0);
-      return sum / ratioHistory.length;
-    }
-
-    function stampToMs(stamp) {
-      if (!stamp || typeof stamp.sec !== 'number') {
-        return null;
-      }
-      const secMs = stamp.sec * 1000;
-      const nanoMs = typeof stamp.nanosec === 'number' ? stamp.nanosec / 1e6 : 0;
-      return secMs + nanoMs;
-    }
-
-    function selectOverlaySnapshot(now) {
-      if (!targetHistory.length) {
-        return null;
-      }
-      const desiredAt = now - getOverlayDelayMs();
-      let best = null;
-      let bestDistance = Number.POSITIVE_INFINITY;
-      for (const sample of targetHistory) {
-        const distance = Math.abs(sample.receivedAt - desiredAt);
-        if (distance < bestDistance) {
-          best = sample;
-          bestDistance = distance;
-        }
-      }
-      if (!best) {
-        return null;
-      }
-      if (now - best.receivedAt > getTargetHoldMs()) {
-        return null;
-      }
-      return best;
-    }
-
-    function getRenderMetrics() {
-      const srcWidth = OVERLAY_SOURCE_WIDTH;
-      const srcHeight = OVERLAY_SOURCE_HEIGHT;
-      const scale = Math.min(overlay.width / srcWidth, overlay.height / srcHeight);
-      const drawWidth = srcWidth * scale;
-      const drawHeight = srcHeight * scale;
-      return {
-        scale,
-        offsetX: (overlay.width - drawWidth) / 2,
-        offsetY: (overlay.height - drawHeight) / 2,
-      };
-    }
-
-    function drawOverlay() {
-      overlayDrawFrames += 1;
-      resizeOverlay();
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-      const snapshot = selectOverlaySnapshot(performance.now());
-      if (!snapshot || !snapshot.targets.length) {
-        bboxStatusEl.textContent = '-';
-        return;
-      }
-
-      const metrics = getRenderMetrics();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#98d96c';
-      ctx.fillStyle = '#98d96c';
-      ctx.font = '16px Segoe UI';
-
-      let bboxText = '-';
-      snapshot.targets.forEach((target) => {
-        const roi = target.rois && target.rois[0];
-        if (!roi || !roi.rect) {
-          return;
-        }
-        const x = metrics.offsetX + roi.rect.x_offset * metrics.scale;
-        const y = metrics.offsetY + roi.rect.y_offset * metrics.scale;
-        const w = roi.rect.width * metrics.scale;
-        const h = roi.rect.height * metrics.scale;
-        ctx.strokeRect(x, y, w, h);
-        ctx.fillText(`${target.type} ${(roi.confidence || 0).toFixed(2)}`, x, Math.max(18, y - 6));
-        bboxText = `${target.type} x=${roi.rect.x_offset} y=${roi.rect.y_offset} w=${roi.rect.width} h=${roi.rect.height}`;
-      });
-      bboxStatusEl.textContent = bboxText;
-    }
-
-    function reasonView(reason) {
-      switch (reason) {
-        case 'ok':
-          return { text: 'ok', cls: 'ok' };
-        case 'no_bear':
-        case 'target_stale':
-          return { text: reason, cls: 'alert' };
-        case 'no_scan':
-        case 'no_valid_scan':
-          return { text: reason, cls: 'warn' };
-        case 'scan_stale':
-          return { text: reason, cls: 'alert' };
-        default:
-          return { text: reason || '-', cls: 'warn' };
-      }
-    }
-
-    function setAgeClass(element, value) {
-      element.className = 'age-ok';
-      const numeric = Number(value);
-      if (!Number.isFinite(numeric)) {
-        return;
-      }
-      if (numeric > 500) {
-        element.className = 'age-alert';
-      } else if (numeric > 200) {
-        element.className = 'age-warn';
-      }
-    }
-
-    function renderFollowStatus() {
-      if (!latestFollowStatus) {
-        followStatusAge.textContent = '-';
-        return;
-      }
-      const payload = latestFollowStatus;
-      const reason = reasonView(payload.reason);
-      followDistFilt.textContent = formatNumber(payload.dist_filt, 3);
-      followSpeedCmd.textContent = formatNumber(payload.speed_cmd, 3);
-      followSteerCmd.textContent = formatNumber(payload.steer_cmd, 3);
-      followReason.textContent = reason.text;
-      followReason.className = `pill ${reason.cls}`;
-      followMode.textContent = payload.mode || '-';
-      followScanTopic.textContent = payload.scan_topic || '-';
-      followRoi.textContent = payload.roi_cx === null || payload.roi_cy === null
-        ? '-'
-        : `${formatNumber(payload.roi_cx, 1)} / ${formatNumber(payload.roi_cy, 1)}`;
-      followThetaRaw.textContent = formatNumber(payload.theta_raw, 3);
-      followThetaFilt.textContent = formatNumber(payload.theta_filt, 3);
-      followDistRaw.textContent = formatNumber(payload.dist_raw, 3);
-      followValidScan.textContent = formatInteger(payload.valid_scan_pts);
-      followStopDistance.textContent = formatNumber(payload.stop_distance_m, 3);
-      followFullSpeedDistance.textContent = formatNumber(payload.full_speed_distance_m, 3);
-      followMaxSpeed.textContent = formatNumber(payload.max_speed, 3);
-      followMaxSteering.textContent = formatNumber(payload.max_steering_angle, 3);
-      if (!tuningDirtyFields.has('stop-distance')) {
-        setTuningFieldValue('stop-distance', payload.stop_distance_m);
-      }
-      if (!tuningDirtyFields.has('full-speed-distance')) {
-        setTuningFieldValue('full-speed-distance', payload.full_speed_distance_m);
-      }
-      if (!tuningDirtyFields.has('max-speed')) {
-        setTuningFieldValue('max-speed', payload.max_speed);
-      }
-      if (!tuningDirtyFields.has('max-steering')) {
-        setTuningFieldValue('max-steering', payload.max_steering_angle);
-      }
-      followTargetAge.textContent = formatInteger(payload.target_age_ms);
-      followScanAge.textContent = formatInteger(payload.scan_age_ms);
-      setAgeClass(followTargetAge, payload.target_age_ms);
-      setAgeClass(followScanAge, payload.scan_age_ms);
-      followStatusAge.textContent = formatAgeFromPerf(latestFollowStatusAt);
-    }
-
-    function renderMjpegStatus() {
-      if (!latestMjpegStatus) {
-        mjpegAgeMsEl.textContent = '-';
-        mjpegSourceFpsEl.textContent = '-';
-        mjpegClientCountEl.textContent = '-';
-        mjpegSkippedEl.textContent = '-';
-        mjpegLatestSeqEl.textContent = '-';
-        mjpegStatusAgeEl.textContent = '-';
-        mjpegReconnectReasonEl.textContent = lastReconnectReason;
-        mjpegReconnectTimeEl.textContent = formatWallClock(lastReconnectTime);
-        return;
-      }
-      mjpegAgeMsEl.textContent = formatNumber(latestMjpegStatus.last_frame_age_ms, 1);
-      mjpegSourceFpsEl.textContent = formatNumber(latestMjpegStatus.source_fps_est, 2);
-      mjpegClientCountEl.textContent = formatInteger(latestMjpegStatus.client_count);
-      mjpegSkippedEl.textContent = formatInteger(latestMjpegStatus.total_frames_skipped);
-      mjpegLatestSeqEl.textContent = formatInteger(latestMjpegStatus.latest_seq);
-      mjpegStatusAgeEl.textContent = formatAgeFromPerf(latestMjpegStatusAt);
-      mjpegReconnectReasonEl.textContent = lastReconnectReason;
-      mjpegReconnectTimeEl.textContent = formatWallClock(lastReconnectTime);
-    }
-
-    function renderStats() {
-      targetCountEl.textContent = targetHistory.length ? String(targetHistory[targetHistory.length - 1].targets.length) : '0';
-      bearRatioEl.textContent = averageRatio('bearRatio').toFixed(2);
-      nonemptyRatioEl.textContent = averageRatio('nonempty').toFixed(2);
-      renderFollowStatus();
-      renderMjpegStatus();
-    }
-
-    function updateModeButtons(mode) {
-      document.querySelectorAll('.mode-btn').forEach((button) => {
-        button.classList.toggle('active', button.dataset.mode === mode);
-      });
-      modeState.textContent = `mode=${mode}`;
-    }
-
-    function setActionButtonsDisabled(disabled) {
-      document.getElementById('apply-camera-btn').disabled = disabled;
-      document.getElementById('apply-follow-btn').disabled = disabled;
-      document.getElementById('apply-all-btn').disabled = disabled;
-    }
-
-    function buildStreamUrl() {
-      const host = robotHostInput.value.trim() || DEFAULT_HOST;
-      const baseUrl = (mjpegUrlInput.value.trim() || `http://${host}:${DEFAULT_MJPEG_PORT}/stream.mjpg`).replace(/\?.*$/, '');
-      const separator = baseUrl.includes('?') ? '&' : '?';
-      return `${baseUrl}${separator}t=${Date.now()}`;
-    }
-
-    function clearPreviewImage() {
-      previewImage.src = '';
-      previewImage.removeAttribute('src');
-    }
-
-    function stopMjpegPreview(clearStatus = false) {
-      mjpegRunning = false;
-      if (mjpegReconnectTimer) {
-        clearTimeout(mjpegReconnectTimer);
-        mjpegReconnectTimer = 0;
-      }
-      clearPreviewImage();
-      if (clearStatus) {
-        latestMjpegStatus = null;
+        const clients = +st.client_count;
+        noClientCount = (Number.isFinite(clients) && clients <= 0) ? noClientCount + 1 : 0;
+        if (isMjpegStale(st)) { setSession('stale'); reconnectMjpeg('stale stream'); }
+        else if (desiredOnline && mjpegRunning && noClientCount >= MJPEG_NO_CLIENT) { setSession('stale'); reconnectMjpeg('no client'); }
+        else if (desiredOnline && rosState === 'connected' && mjpegRunning) setSession('live');
+      })
+      .catch(() => {
         latestMjpegStatusAt = 0;
-        resetMjpegSequenceTracking();
-      }
-      bboxStatusEl.textContent = '-';
-      placeholder.style.display = 'flex';
-    }
+        if (desiredOnline) { setSession(mjpegRunning ? 'stale' : 'error'); reconnectMjpeg('poll fail'); }
+      })
+      .finally(() => { mjpegPollInFlight = false; scheduleWatchdog(false); });
+  }
 
-    function startMjpegPreview() {
-      if (!sessionDesiredOnline || mjpegRunning) {
-        return false;
-      }
-      if (!['offline', 'stale', 'error', 'reconnecting', 'connecting'].includes(sessionState)) {
-        return false;
-      }
-      lastMjpegConnectAt = Date.now();
-      mjpegRunning = true;
-      imageModeStatus.textContent = 'MJPEG Low Latency';
-      placeholder.style.display = 'flex';
-      previewImage.src = buildStreamUrl();
-      if (sessionState !== 'reconnecting') {
-        setSessionState('connecting');
-      }
-      return true;
-    }
+  function publishJson(topic, payload, statusEl, label) {
+    if (!ros || !topic) { statusEl.textContent = `${label}: not connected`; return false; }
+    const body = JSON.stringify(payload);
+    topic.publish(new ROSLIB.Message({ data: body }));
+    statusEl.textContent = `${label}: ${body}`;
+    return true;
+  }
 
-    function reconnectMjpegPreview(reason) {
-      if (!sessionDesiredOnline) {
-        return;
-      }
-      lastReconnectReason = reason;
-      lastReconnectTime = Date.now();
-      if (mjpegReconnectTimer) {
-        return;
-      }
-      setSessionState('reconnecting');
-      stopMjpegPreview(false);
-      const waitMs = Math.max(0, MIN_MJPEG_RECONNECT_INTERVAL_MS - (Date.now() - lastMjpegConnectAt));
-      mjpegReconnectTimer = window.setTimeout(() => {
-        mjpegReconnectTimer = 0;
-        if (!sessionDesiredOnline) {
-          return;
-        }
-        startMjpegPreview();
-      }, waitMs);
-    }
+  function connectRos() {
+    if (typeof ROSLIB === 'undefined') { rosState = 'error'; setRosBadge('roslib MISSING', 'red'); return; }
+    if (ros && (rosState === 'connected' || rosState === 'connecting')) return;
+    resetRos(true);
+    ros = new ROSLIB.Ros({ url: domRosUrl.value.trim() });
+    const cur = ros;
+    rosState = 'connecting';
+    setRosBadge('ROS CONNECTING', 'amber');
 
-    function scheduleMjpegWatchdog(immediate = false) {
-      if (mjpegWatchdogTimer) {
-        clearTimeout(mjpegWatchdogTimer);
-        mjpegWatchdogTimer = 0;
-      }
-      if (!sessionDesiredOnline) {
-        return;
-      }
-      mjpegWatchdogTimer = window.setTimeout(mjpegWatchdogLoop, immediate ? 0 : MJPEG_STATUS_POLL_MS);
-    }
+    cur.on('connection', () => {
+      if (ros !== cur) return;
+      rosState = 'connected';
+      setRosBadge('ROS CONNECTED', 'green');
 
-    function handleGoodMjpegStatus(status) {
-      latestMjpegStatus = status;
-      latestMjpegStatusAt = performance.now();
-      const latestSeq = Number(status.latest_seq);
-      const clientCount = Number(status.client_count);
-      if (Number.isFinite(latestSeq)) {
-        if (lastObservedMjpegSeq === latestSeq) {
-          mjpegStatusSeqStallCount += 1;
-        } else {
-          lastObservedMjpegSeq = latestSeq;
-          mjpegStatusSeqStallCount = 0;
-        }
-      }
-      if (Number.isFinite(clientCount) && clientCount <= 0) {
-        mjpegNoClientCount += 1;
-      } else {
-        mjpegNoClientCount = 0;
-      }
-      const hasFrameAge = Number.isFinite(Number(status.last_frame_age_ms));
-      if (isMjpegStatusStale(status)) {
-        setSessionState('stale');
-        reconnectMjpegPreview('stale stream');
-        return;
-      }
-      if (sessionDesiredOnline && mjpegRunning && mjpegNoClientCount >= MJPEG_NO_CLIENT_THRESHOLD) {
-        setSessionState('stale');
-        reconnectMjpegPreview('no mjpeg client');
-        return;
-      }
-      if (sessionDesiredOnline && rosConnectionState === 'connected' && mjpegRunning && Number.isFinite(latestSeq) && hasFrameAge) {
-        setSessionState('live');
-      } else if (sessionDesiredOnline && rosConnectionState !== 'error') {
-        setSessionState(mjpegReconnectTimer ? 'reconnecting' : 'connecting');
-      }
-    }
+      tMode     = new ROSLIB.Topic({ ros, name: T_TOPICS.mode, messageType: 'std_msgs/msg/String' });
+      tTuning   = new ROSLIB.Topic({ ros, name: T_TOPICS.tuning, messageType: 'std_msgs/msg/String' });
+      tCamera   = new ROSLIB.Topic({ ros, name: T_TOPICS.camera, messageType: 'std_msgs/msg/String' });
+      tTargets  = new ROSLIB.Topic({ ros, name: T_TOPICS.targets, messageType: 'ai_msgs/msg/PerceptionTargets' });
+      tStatus   = new ROSLIB.Topic({ ros, name: T_TOPICS.status, messageType: 'std_msgs/msg/String' });
+      tTuningStat = new ROSLIB.Topic({ ros, name: T_TOPICS.tuningStatus, messageType: 'std_msgs/msg/String' });
+      tCameraStat = new ROSLIB.Topic({ ros, name: T_TOPICS.cameraStatus, messageType: 'std_msgs/msg/String' });
 
-    function handleBadMjpegStatus(reason) {
-      latestMjpegStatusAt = 0;
-      if (!sessionDesiredOnline) {
-        return;
-      }
-      setSessionState(mjpegRunning ? 'stale' : 'error');
-      reconnectMjpegPreview(reason);
-    }
-
-    function mjpegWatchdogLoop() {
-      if (!sessionDesiredOnline) {
-        return;
-      }
-      if (mjpegStatusPollInFlight) {
-        scheduleMjpegWatchdog(false);
-        return;
-      }
-      mjpegStatusPollInFlight = true;
-      fetch(buildMjpegStatusUrl(), { cache: 'no-store' })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-          return response.json();
-        })
-        .then((status) => {
-          handleGoodMjpegStatus(status);
-        })
-        .catch(() => {
-          handleBadMjpegStatus('status poll failed');
-        })
-        .finally(() => {
-          mjpegStatusPollInFlight = false;
-          scheduleMjpegWatchdog(false);
+      /* --- Subscribe: /bear_detection/targets --- */
+      tTargets.subscribe((msg) => {
+        targetFrames++;
+        const all = Array.isArray(msg.targets) ? msg.targets : [];
+        const bears = all.filter(t => t.type === 'bear');
+        targetHistory.push({
+          receivedAt: performance.now(),
+          stampMs: msg.header && msg.header.stamp ? (msg.header.stamp.sec * 1000 + (msg.header.stamp.nanosec || 0) / 1e6) : null,
+          targets: bears,
         });
-    }
-
-    function publishJson(topic, payload, statusElement, label) {
-      if (!ros || !topic) {
-        statusElement.textContent = `${label}: rosbridge not connected`;
-        return false;
-      }
-      const body = JSON.stringify(payload);
-      topic.publish(new ROSLIB.Message({ data: body }));
-      statusElement.textContent = `${label}: ${body}`;
-      return true;
-    }
-
-    function getCameraPayload() {
-      return {
-        brightness: Number(document.getElementById('brightness-number').value),
-        exposure: Number(document.getElementById('exposure-number').value),
-        auto_exposure: false,
-      };
-    }
-
-    function getFollowPayload() {
-      return {
-        max_speed: Number(document.getElementById('max-speed-number').value),
-        max_steering_angle: Number(document.getElementById('max-steering-number').value),
-        stop_distance_m: Number(document.getElementById('stop-distance-number').value),
-        full_speed_distance_m: Number(document.getElementById('full-speed-distance-number').value),
-      };
-    }
-
-    function applyCamera() {
-      if (cameraAutoApplyTimer) {
-        window.clearTimeout(cameraAutoApplyTimer);
-        cameraAutoApplyTimer = 0;
-      }
-      return publishJson(cameraControlTopic, getCameraPayload(), cameraApplyStatus, 'camera sent');
-    }
-
-    function applyFollowTuning() {
-      return publishJson(tuningTopic, getFollowPayload(), followApplyStatus, 'follow sent');
-    }
-
-    function applyAll() {
-      applyCamera();
-      applyFollowTuning();
-    }
-
-    function resetRosState(closeSocket) {
-      clearRosTopics();
-      if (cameraAutoApplyTimer) {
-        window.clearTimeout(cameraAutoApplyTimer);
-        cameraAutoApplyTimer = 0;
-      }
-      cameraDirtyFields.clear();
-      tuningDirtyFields.clear();
-      if (closeSocket && ros) {
-        ros.close();
-      }
-      ros = null;
-      rosConnectionState = 'offline';
-      rosStatus.textContent = 'offline';
-      setActionButtonsDisabled(true);
-    }
-
-    function ensureRosConnection() {
-      if (typeof ROSLIB === 'undefined') {
-        rosConnectionState = 'error';
-        rosStatus.textContent = 'roslib missing';
-        setSessionState('error');
-        return false;
-      }
-      if (ros && (rosConnectionState === 'connected' || rosConnectionState === 'connecting')) {
-        return false;
-      }
-      resetRosState(true);
-      ros = new ROSLIB.Ros({ url: rosUrlInput.value.trim() });
-      const currentRos = ros;
-      rosConnectionState = 'connecting';
-      rosStatus.textContent = 'connecting';
-
-      currentRos.on('connection', () => {
-        if (ros !== currentRos) {
-          return;
-        }
-        rosConnectionState = 'connected';
-        rosStatus.textContent = 'connected';
-        modeTopic = new ROSLIB.Topic({ ros, name: FOLLOW_MODE_TOPIC, messageType: 'std_msgs/msg/String' });
-        tuningTopic = new ROSLIB.Topic({ ros, name: FOLLOW_TUNING_TOPIC, messageType: 'std_msgs/msg/String' });
-        cameraControlTopic = new ROSLIB.Topic({ ros, name: CAMERA_CONTROL_TOPIC, messageType: 'std_msgs/msg/String' });
-        targetTopic = new ROSLIB.Topic({ ros, name: TARGET_TOPIC_NAME, messageType: 'ai_msgs/msg/PerceptionTargets' });
-        followStatusTopic = new ROSLIB.Topic({ ros, name: FOLLOW_STATUS_TOPIC, messageType: 'std_msgs/msg/String' });
-        followTuningStatusTopic = new ROSLIB.Topic({ ros, name: FOLLOW_TUNING_STATUS_TOPIC, messageType: 'std_msgs/msg/String' });
-        cameraStatusTopic = new ROSLIB.Topic({ ros, name: CAMERA_STATUS_TOPIC, messageType: 'std_msgs/msg/String' });
-
-        targetTopic.subscribe((msg) => {
-          targetFrames += 1;
-          const allTargets = Array.isArray(msg.targets) ? msg.targets : [];
-          const bearTargets = allTargets.filter((target) => target.type === 'bear');
-          const hasBox = bearTargets.some((target) => target.rois && target.rois[0] && target.rois[0].rect);
-          targetHistory.push({
-            receivedAt: performance.now(),
-            rosStampMs: stampToMs(msg.header && msg.header.stamp),
-            targets: bearTargets,
-          });
-          if (targetHistory.length > TARGET_HISTORY_LIMIT) {
-            targetHistory.shift();
-          }
-          pushRatioSample(allTargets.length, bearTargets.length, hasBox);
-        });
-
-        followStatusTopic.subscribe((msg) => {
-          followStatusFrames += 1;
-          latestFollowStatusAt = performance.now();
-          try {
-            latestFollowStatus = JSON.parse(msg.data || '{}');
-            if (latestFollowStatus && typeof latestFollowStatus.mode === 'string') {
-              updateModeButtons(String(latestFollowStatus.mode).toUpperCase());
-            }
-          } catch (_error) {
-            latestFollowStatus = { reason: 'status json error' };
-          }
-        });
-
-        followTuningStatusTopic.subscribe((msg) => {
-          followTuningStatus.textContent = msg.data || 'empty';
-          try {
-            const payload = JSON.parse(msg.data || '{}');
-            if (payload && payload.ok === true) {
-              tuningDirtyFields.clear();
-            }
-          } catch (_error) {
-            // Ignore malformed status payloads and keep local edits untouched.
-          }
-        });
-
-        cameraStatusTopic.subscribe((msg) => {
-          cameraBackendStatus.textContent = msg.data || 'empty';
-          try {
-            const payload = JSON.parse(msg.data || '{}');
-            if (payload && payload.current) {
-              if (!cameraDirtyFields.has('brightness')) {
-                setTuningFieldValue('brightness', payload.current.brightness);
-              }
-              if (!cameraDirtyFields.has('exposure')) {
-                setTuningFieldValue('exposure', payload.current.exposure);
-              }
-            }
-            if (payload && payload.ok === true && payload.message === 'camera controls applied') {
-              cameraDirtyFields.clear();
-              if (payload.current) {
-                setTuningFieldValue('brightness', payload.current.brightness);
-                setTuningFieldValue('exposure', payload.current.exposure);
-              }
-              cameraApplyStatus.textContent = `camera applied: ${JSON.stringify(payload.current || {})}`;
-            }
-          } catch (_error) {
-            // Keep raw backend text when status is not JSON.
-          }
-        });
-
-        setActionButtonsDisabled(false);
-        if (sessionDesiredOnline && mjpegRunning && latestMjpegStatus && !isMjpegStatusStale(latestMjpegStatus)) {
-          setSessionState('live');
-        }
+        if (targetHistory.length > TARGET_HIST) targetHistory.shift();
       });
 
-      currentRos.on('error', () => {
-        if (ros !== currentRos) {
-          return;
-        }
-        rosConnectionState = 'error';
-        rosStatus.textContent = 'error';
-        setActionButtonsDisabled(true);
-        if (sessionDesiredOnline) {
-          setSessionState('error');
-        }
+      /* --- Subscribe: /kt_follow/status --- */
+      tStatus.subscribe((msg) => {
+        statusFrames++;
+        latestStatusAt = performance.now();
+        try {
+          latestStatus = JSON.parse(msg.data || '{}');
+          if (latestStatus && typeof latestStatus.mode === 'string') {
+            updateModeBadge(String(latestStatus.mode).toUpperCase());
+          }
+        } catch { latestStatus = { reason: 'json error' }; }
       });
 
-      currentRos.on('close', () => {
-        if (ros !== currentRos) {
-          return;
-        }
-        clearRosTopics();
-        ros = null;
-        rosConnectionState = 'offline';
-        rosStatus.textContent = 'offline';
-        setActionButtonsDisabled(true);
-        if (sessionDesiredOnline) {
-          setSessionState('error');
-        }
+      /* --- Subscribe: /kt_follow/tuning_status --- */
+      tTuningStat.subscribe((msg) => {
+        domTuneStat.textContent = msg.data || 'empty';
+        try {
+          const p = JSON.parse(msg.data || '{}');
+          if (p && p.ok === true) tuneDirty.clear();
+        } catch {}
       });
-      return true;
+
+      /* --- Subscribe: /kt_camera/status --- */
+      tCameraStat.subscribe((msg) => {
+        domCamStat.textContent = msg.data || 'empty';
+        try {
+          const p = JSON.parse(msg.data || '{}');
+          if (p && p.current) {
+            if (!camDirty.has('brightness')) setSliderVal('cam-brightness', p.current.brightness, 0);
+            if (!camDirty.has('exposure')) setSliderVal('cam-exposure', p.current.exposure, 0);
+            domCamAuto.textContent = String(p.current.auto_exposure);
+          }
+          if (p && p.ok === true) {
+            camDirty.clear();
+            if (p.current) {
+              setSliderVal('cam-brightness', p.current.brightness, 0);
+              setSliderVal('cam-exposure', p.current.exposure, 0);
+              domCamStat.textContent = `applied: ${JSON.stringify(p.current)}`;
+            }
+          }
+        } catch {}
+      });
+
+      domCamBtn.disabled = false;
+      domTuneBtn.disabled = false;
+      if (desiredOnline && mjpegRunning && latestMjpegStatus && !isMjpegStale(latestMjpegStatus)) setSession('live');
+    });
+
+    cur.on('error', () => {
+      if (ros !== cur) return;
+      rosState = 'error';
+      setRosBadge('ROS ERROR', 'red');
+      domCamBtn.disabled = true; domTuneBtn.disabled = true;
+      if (desiredOnline) setSession('error');
+    });
+
+    cur.on('close', () => {
+      if (ros !== cur) return;
+      clearTopics();
+      ros = null; rosState = 'offline';
+      setRosBadge('ROS DISCONNECTED', 'red');
+      domCamBtn.disabled = true; domTuneBtn.disabled = true;
+      if (desiredOnline) setSession('error');
+    });
+  }
+
+  function startSession() {
+    if (sessionState === 'live' && rosState === 'connected' && mjpegRunning) return;
+    desiredOnline = true;
+    if (['offline','error','stale'].includes(sessionState)) setSession('connecting');
+    connectRos();
+    startMjpeg();
+    scheduleWatchdog(true);
+  }
+
+  function stopSession() {
+    desiredOnline = false;
+    if (mjpegWatchdogTimer) { clearTimeout(mjpegWatchdogTimer); mjpegWatchdogTimer = 0; }
+    mjpegPollInFlight = false;
+    stopMjpeg(true);
+    resetRos(true);
+    setSession('offline');
+    latestStatus = null; latestStatusAt = 0;
+    domTuneStat.textContent = 'idle';
+    domCamStat.textContent = 'idle';
+  }
+
+  function setSession(s) {
+    sessionState = s;
+    const map = { offline: 'OFFLINE', connecting: 'CONNECTING...', live: 'LIVE', stale: 'STALE', error: 'ERROR' };
+    const col = { offline: 'bgray', connecting: 'amber', live: 'green', stale: 'amber', error: 'red' };
+    setSessionBadge(map[s] || s, col[s] || 'bgray');
+  }
+
+  function publishMode(mode) {
+    updateModeBadge(mode);
+    if (tMode) tMode.publish(new ROSLIB.Message({ data: mode }));
+  }
+  /* ============================================
+     Fragment 60: Overlay Drawing (MJPEG + Canvas)
+     ============================================ */
+
+  function resizeOverlay() {
+    const r = domPreview.getBoundingClientRect();
+    domOverlay.width = r.width || 640;
+    domOverlay.height = r.height || 480;
+  }
+
+  function getMetrics() {
+    const scale = Math.min(domOverlay.width / SRC_W, domOverlay.height / SRC_H);
+    const dw = SRC_W * scale, dh = SRC_H * scale;
+    return { scale, ox: (domOverlay.width - dw) / 2, oy: (domOverlay.height - dh) / 2 };
+  }
+
+  function selectSnapshot(now) {
+    if (!targetHistory.length) return null;
+    // Overlay delay is read from a default of 80ms (hardcoded for simplicity)
+    const delay = 80;
+    const desiredAt = now - delay;
+    let best = null, bestDist = Infinity;
+    for (const s of targetHistory) {
+      const d = Math.abs(s.receivedAt - desiredAt);
+      if (d < bestDist) { best = s; bestDist = d; }
+    }
+    // Target hold: 250ms
+    if (best && (now - best.receivedAt) > 250) return null;
+    return best;
+  }
+
+  function drawOverlay() {
+    overlayFrames++;
+    resizeOverlay();
+    ctx.clearRect(0, 0, domOverlay.width, domOverlay.height);
+
+    const snap = selectSnapshot(performance.now());
+    if (!snap || !snap.targets || !snap.targets.length) return;
+
+    const m = getMetrics();
+
+    // --- Centerline (dashed) ---
+    const cx = m.ox + (SRC_W * 0.5) * m.scale;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(113,216,215,0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cx, m.oy);
+    ctx.lineTo(cx, m.oy + SRC_H * m.scale);
+    ctx.stroke();
+    ctx.restore();
+
+    // --- Draw targets ---
+    for (const target of snap.targets) {
+      const roi = target.rois && target.rois[0];
+      if (!roi || !roi.rect) continue;
+
+      const rx = roi.rect.x_offset;
+      const ry = roi.rect.y_offset;
+      const rw = roi.rect.width;
+      const rh = roi.rect.height;
+      const conf = roi.confidence || 0;
+      const x = m.ox + rx * m.scale;
+      const y = m.oy + ry * m.scale;
+      const w = rw * m.scale;
+      const h = rh * m.scale;
+
+      // Bbox
+      ctx.strokeStyle = '#98d96c';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, w, h);
+
+      // Target center crosshair
+      const tcx = m.ox + (rx + rw * 0.5) * m.scale;
+      const tcy = m.oy + (ry + rh * 0.5) * m.scale;
+      const crossSize = 10;
+      ctx.strokeStyle = '#e6bd58';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(tcx - crossSize, tcy);
+      ctx.lineTo(tcx + crossSize, tcy);
+      ctx.moveTo(tcx, tcy - crossSize);
+      ctx.lineTo(tcx, tcy + crossSize);
+      ctx.stroke();
+
+      // ROI label: confidence
+      ctx.fillStyle = '#98d96c';
+      ctx.font = 'bold 13px Segoe UI';
+      ctx.fillText(`conf=${conf.toFixed(2)}`, x, Math.max(16, y - 24));
+
+      // ROI label: distance and angle from follow status
+      if (latestStatus) {
+        const dist = latestStatus.dist_filt;
+        const angle = latestStatus.theta_filt;
+        const distTxt = Number.isFinite(+dist) ? `dist=${(+dist).toFixed(2)}m` : 'dist=N/A';
+        const angTxt = Number.isFinite(+angle) ? `ang=${(+angle).toFixed(3)}rad` : 'ang=N/A';
+        ctx.fillStyle = '#71d8d7';
+        ctx.font = '11px Segoe UI';
+        ctx.fillText(`${distTxt}  ${angTxt}`, x, Math.max(12, y - 8));
+      }
     }
 
-    function startSession() {
-      if (sessionState === 'live' && rosConnectionState === 'connected' && mjpegRunning) {
-        return;
-      }
-      sessionDesiredOnline = true;
-      if (sessionState === 'offline' || sessionState === 'error' || sessionState === 'stale') {
-        setSessionState('connecting');
-      }
-      ensureRosConnection();
-      startMjpegPreview();
-      scheduleMjpegWatchdog(true);
+    // --- Stale target indicator ---
+    if (latestStatus && Number.isFinite(latestStatus.target_age_ms) && latestStatus.target_age_ms > 500) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(215,107,107,0.85)';
+      ctx.font = 'bold 16px Segoe UI';
+      const txt = 'TARGET LOST';
+      const tw = ctx.measureText(txt).width;
+      ctx.fillText(txt, (domOverlay.width - tw) / 2, 30);
+      ctx.restore();
     }
+  }
+  /* ============================================
+     Fragment 70: Controls (Camera, Tuning, Actions)
+     FORBIDDEN: no enable_control toggle, no ackermann publisher
+     ============================================ */
 
-    function stopSession() {
-      sessionDesiredOnline = false;
-      if (mjpegWatchdogTimer) {
-        clearTimeout(mjpegWatchdogTimer);
-        mjpegWatchdogTimer = 0;
-      }
-      mjpegStatusPollInFlight = false;
-      stopMjpegPreview(true);
-      resetRosState(true);
-      setSessionState('offline');
-      latestFollowStatus = null;
-      latestFollowStatusAt = 0;
-      followTuningStatus.textContent = 'idle';
-      cameraBackendStatus.textContent = 'idle';
-      cameraApplyStatus.textContent = 'idle';
-      followApplyStatus.textContent = 'idle';
-      imageModeStatus.textContent = 'idle';
+  /* --- Slider Sync --- */
+  function setSliderVal(prefix, val, digits) {
+    const num = $(`${prefix}-num`);
+    const rng = $(`${prefix}-rng`);
+    if (!num || !rng) return;
+    if (!Number.isFinite(+val)) return;
+    const v = +val;
+    num.value = digits > 0 ? v.toFixed(digits) : String(Math.round(v));
+    rng.value = String(clamp(v, +rng.min, +rng.max));
+  }
+
+  function syncSliderPair(numEl, rngEl, digits, onInput) {
+    const update = () => {
+      const v = clamp(+numEl.value, +rngEl.min, +rngEl.max);
+      numEl.value = digits > 0 ? v.toFixed(digits) : String(Math.round(v));
+      rngEl.value = String(v);
+      if (onInput) onInput();
+    };
+    numEl.addEventListener('input', update);
+    rngEl.addEventListener('input', () => {
+      numEl.value = digits > 0 ? (+rngEl.value).toFixed(digits) : String(Math.round(+rngEl.value));
+      if (onInput) onInput();
+    });
+    update();
+  }
+
+  function markCamDirty() { camDirty.add('brightness'); camDirty.add('exposure'); scheduleCamAuto(); }
+  function markTuneDirty() { tuneDirty.add('max-speed'); tuneDirty.add('max-steer'); tuneDirty.add('stop'); tuneDirty.add('full'); }
+
+  function scheduleCamAuto() {
+    if (camAutoTimer) clearTimeout(camAutoTimer);
+    camAutoTimer = setTimeout(() => {
+      camAutoTimer = 0;
+      if (rosState === 'connected') applyCamera();
+    }, CAM_AUTO_DELAY_MS);
+  }
+
+  /* --- Camera Apply --- */
+  function getCameraPayload() {
+    return {
+      brightness: +domCamBNum.value,
+      exposure: +domCamENum.value,
+      auto_exposure: false,
+    };
+  }
+
+  function applyCamera() {
+    if (camAutoTimer) { clearTimeout(camAutoTimer); camAutoTimer = 0; }
+    return publishJson(tCamera, getCameraPayload(), domCamStat, 'camera sent');
+  }
+
+  /* --- Tuning Apply --- */
+  function getTuningPayload() {
+    return {
+      max_speed: +domTuneMSNum.value,
+      max_steering_angle: +domTuneMTNum.value,
+      stop_distance_m: +domTuneSDNum.value,
+      full_speed_distance_m: +domTuneFDNum.value,
+    };
+  }
+
+  function applyTuning() {
+    return publishJson(tTuning, getTuningPayload(), domTuneStat, 'tuning sent');
+  }
+
+  function applyAll() {
+    applyCamera();
+    applyTuning();
+  }
+
+  /* --- Mode Badge Update --- */
+  function updateModeBadge(mode) {
+    domBadgeMode.textContent = mode;
+    domBadgeMode.className = `badge ${mode === 'FOLLOW' ? 'green' : mode === 'MANUAL' ? 'amber' : 'bgray'}`;
+    domVidFollow.textContent = mode;
+    domVidFollow.className = `badge ${mode === 'FOLLOW' ? 'green' : mode === 'MANUAL' ? 'amber' : 'bgray'}`;
+    domFSMode.textContent = mode;
+  }
+  /* ============================================
+     Fragment 80: Render Loop, UI Card Updates
+     ============================================ */
+
+  function reasonPill(reason) {
+    const map = {
+      ok: { text: 'ok', cls: 'ok' },
+      no_bear: { text: reason, cls: 'alert' },
+      target_stale: { text: reason, cls: 'alert' },
+      no_scan: { text: reason, cls: 'warn' },
+      no_valid_scan: { text: reason, cls: 'warn' },
+      scan_stale: { text: reason, cls: 'alert' },
+    };
+    return map[reason] || { text: reason || '-', cls: 'warn' };
+  }
+
+  function renderFollowState() {
+    if (!latestStatus) {
+      domFSMode.textContent = '-';
+      domFSEnable.textContent = '-';
+      domFSPublish.textContent = '-';
+      domFSReason.innerHTML = '<span class="pill">-</span>';
+      domFSLong.textContent = '-';
+      domFSTargetAge.textContent = '-';
+      domFSScanAge.textContent = '-';
+      domFSScanPts.textContent = '-';
+      return;
     }
+    const s = latestStatus;
 
-    function publishMode(mode) {
-      updateModeButtons(mode);
-      if (modeTopic) {
-        modeTopic.publish(new ROSLIB.Message({ data: mode }));
-      }
+    domFSMode.textContent = s.mode || '-';
+    // enable_control: show from status if present, otherwise show false
+    const ec = s.enable_control;
+    domFSEnable.textContent = (ec === true) ? 'true' : (ec === false || ec == null) ? 'false (dry-run)' : String(ec);
+    domFSEnable.style.color = ec ? 'var(--amber)' : 'var(--muted)';
+
+    domFSPublish.textContent = s.publishing ? 'true' : 'false';
+    domFSPublish.style.color = s.publishing ? 'var(--green)' : 'var(--blue-gray)';
+
+    const rv = reasonPill(s.reason);
+    domFSReason.innerHTML = `<span class="pill ${rv.cls}">${rv.text}</span>`;
+    domBadgeReason.textContent = rv.text;
+    domBadgeReason.className = `badge ${rv.cls === 'ok' ? 'green' : rv.cls === 'alert' ? 'red' : 'amber'}`;
+
+    domFSLong.textContent = s.longitudinal_state || s.long_state || '-';
+    domFSTargetAge.textContent = fmtInt(s.target_age_ms);
+    setAgeClass(domFSTargetAge, s.target_age_ms);
+    domFSScanAge.textContent = fmtInt(s.scan_age_ms);
+    setAgeClass(domFSScanAge, s.scan_age_ms);
+    domFSScanPts.textContent = fmtInt(s.valid_scan_pts);
+
+    // System: follow_v4
+    const age = latestStatusAt > 0 ? (performance.now() - latestStatusAt) : 9999;
+    domSFollow.textContent = age < 2000 ? 'active' : 'stale';
+    domSFollow.style.color = age < 2000 ? 'var(--green)' : 'var(--amber)';
+  }
+
+  function renderCommand() {
+    if (!latestStatus) {
+      domCmdSpeed.textContent = '-';
+      domCmdSteer.textContent = '-';
+      domCmdPubSpeed.textContent = 'N/A';
+      domCmdPubSteer.textContent = 'N/A';
+      domCmdOdom.textContent = '-';
+      domCmdActualSteer.textContent = 'N/A';
+      return;
     }
+    const s = latestStatus;
+    // Computed values (always from controller)
+    domCmdSpeed.textContent = fmt(s.speed_cmd, 3);
+    domCmdSteer.textContent = fmt(s.steer_cmd, 4);
+    // Published values: dry-run → N/A
+    const publishing = !!s.publishing;
+    domCmdPubSpeed.textContent = publishing ? fmt(s.speed_cmd, 3) : 'N/A';
+    domCmdPubSpeed.style.color = publishing ? 'var(--green)' : 'var(--blue-gray)';
+    domCmdPubSteer.textContent = publishing ? fmt(s.steer_cmd, 4) : 'N/A';
+    domCmdPubSteer.style.color = publishing ? 'var(--green)' : 'var(--blue-gray)';
+    // Odom (actual feedback)
+    domCmdOdom.textContent = fmt(s.v_odom, 3);
+    // Actual steering: no topic available
+    domCmdActualSteer.textContent = 'N/A';
+  }
 
-    setInterval(() => {
-      targetFpsEl.textContent = String(targetFrames);
-      overlayFpsEl.textContent = String(overlayDrawFrames);
-      followStatusFpsEl.textContent = String(followStatusFrames);
-      targetFrames = 0;
-      overlayDrawFrames = 0;
-      followStatusFrames = 0;
-    }, 1000);
+  function renderSafety() {
+    if (!latestStatus) {
+      domSVDist.textContent = '-';
+      domSVTheta.textContent = '-';
+      domSVRoi.textContent = '-';
+      domSVVodom.textContent = '-';
+      return;
+    }
+    const s = latestStatus;
+    domSVDist.textContent = fmt(s.dist_filt, 3);
+    domSVTheta.textContent = fmt(s.theta_filt, 4);
+    domSVRoi.textContent = (s.roi_cx != null && s.roi_cy != null) ? `${fmt(s.roi_cx, 1)} / ${fmt(s.roi_cy, 1)}` : '-';
+    domSVVodom.textContent = fmt(s.v_odom, 3);
+  }
 
-    setInterval(drawOverlay, OVERLAY_DRAW_INTERVAL_MS);
-    setInterval(renderStats, DOM_UPDATE_INTERVAL_MS);
+  function syncTuningFromStatus() {
+    if (!latestStatus) return;
+    const s = latestStatus;
+    if (!tuneDirty.has('max-speed') && s.max_speed != null) setSliderVal('tune-max-speed', s.max_speed, 2);
+    if (!tuneDirty.has('max-steer') && s.max_steering_angle != null) setSliderVal('tune-max-steer', s.max_steering_angle, 2);
+    if (!tuneDirty.has('stop') && s.stop_distance_m != null) setSliderVal('tune-stop', s.stop_distance_m, 2);
+    if (!tuneDirty.has('full') && s.full_speed_distance_m != null) setSliderVal('tune-full', s.full_speed_distance_m, 2);
+  }
 
-    robotHostInput.addEventListener('input', syncHostFields);
-    robotHostInput.addEventListener('change', () => {
-      syncHostFields();
-      if (sessionDesiredOnline) {
-        resetRosState(true);
-        ensureRosConnection();
-        reconnectMjpegPreview('host changed');
-      }
-    });
-    rosUrlInput.addEventListener('change', () => {
-      syncFooterFields();
-      saveConnectionConfig();
-      if (sessionDesiredOnline) {
-        resetRosState(true);
-        ensureRosConnection();
-      }
-    });
-    mjpegUrlInput.addEventListener('change', () => {
-      syncFooterFields();
-      saveConnectionConfig();
-      if (sessionDesiredOnline) {
-        reconnectMjpegPreview('stream url changed');
-      }
-    });
-    document.getElementById('connect-btn').addEventListener('click', startSession);
-    document.getElementById('disconnect-btn').addEventListener('click', stopSession);
-    document.getElementById('apply-camera-btn').addEventListener('click', applyCamera);
-    document.getElementById('apply-follow-btn').addEventListener('click', applyFollowTuning);
-    document.getElementById('apply-all-btn').addEventListener('click', applyAll);
-    document.querySelectorAll('.mode-btn').forEach((button) => {
-      button.addEventListener('click', () => publishMode(button.dataset.mode));
-    });
-    previewImage.addEventListener('load', () => {
-      placeholder.style.display = 'none';
-      drawOverlay();
-    });
-    previewImage.addEventListener('error', () => {
-      placeholder.style.display = 'flex';
-      if (sessionDesiredOnline) {
-        setSessionState('stale');
-        reconnectMjpegPreview('image error');
-      }
-    });
-    window.addEventListener('resize', drawOverlay);
+  function renderMjpegStatus() {
+    const st = latestMjpegStatus;
+    if (!st) return;
+    // Update system: camera (from camera status)
+    domSCamera.textContent = domCamStat.textContent === 'idle' ? '-' : 'active';
+  }
 
-    const initialConnectionConfig = getInitialConnectionConfig();
-    robotHostInput.value = initialConnectionConfig.robotHost;
-    rosUrlInput.value = `ws://${initialConnectionConfig.robotHost}:${initialConnectionConfig.rosbridgePort}`;
-    mjpegUrlInput.value = `http://${initialConnectionConfig.robotHost}:${initialConnectionConfig.mjpegPort}/stream.mjpg`;
-    syncFooterFields();
-    saveConnectionConfig();
-    initTuningFields();
-    initOverlayControls();
-    setActionButtonsDisabled(true);
-    setSessionState('offline');
-    startSession();
-  </script>
+  function updateBadgeSystem() {
+    domSBearDet.textContent = targetFrames > 0 ? 'active' : '-';
+    domSLidar.textContent = latestStatus && latestStatus.scan_age_ms != null && latestStatus.scan_age_ms < 2000 ? 'active' : '-';
+    domSLidar.style.color = domSLidar.textContent === 'active' ? 'var(--green)' : 'var(--muted)';
+    domSBase.textContent = latestStatus && latestStatus.v_odom != null ? 'active' : '-';
+    domSBase.style.color = domSBase.textContent === 'active' ? 'var(--green)' : 'var(--muted)';
+    domSBearDet.style.color = domSBearDet.textContent === 'active' ? 'var(--green)' : 'var(--muted)';
+  }
+
+  function renderAll() {
+    renderFollowState();
+    renderCommand();
+    renderSafety();
+    syncTuningFromStatus();
+    renderMjpegStatus();
+    updateBadgeSystem();
+  }
+
+  /* --- FPS Counter --- */
+  setInterval(() => {
+    domBottomStatus.textContent = `tgt=${targetFrames} ovl=${overlayFrames} sts=${statusFrames}`;
+    targetFrames = 0; overlayFrames = 0; statusFrames = 0;
+  }, 1000);
+
+  /* --- Main Loops --- */
+  setInterval(drawOverlay, OVERLAY_DRAW_MS);
+  setInterval(renderAll, DOM_UPDATE_MS);
+  /* ============================================
+     Fragment 90: Initialization, Event Listeners, Close
+     ============================================ */
+
+  /* --- Init sliders --- */
+  syncSliderPair(domCamBNum, domCamBRng, 0, markCamDirty);
+  syncSliderPair(domCamENum, domCamERng, 0, markCamDirty);
+  syncSliderPair(domTuneMSNum, domTuneMSRng, 2, markTuneDirty);
+  syncSliderPair(domTuneMTNum, domTuneMTRng, 2, markTuneDirty);
+  syncSliderPair(domTuneSDNum, domTuneSDRng, 2, markTuneDirty);
+  syncSliderPair(domTuneFDNum, domTuneFDRng, 2, markTuneDirty);
+
+  /* --- Top bar: host sync --- */
+  domHost.addEventListener('input', syncUrls);
+  domHost.addEventListener('change', () => {
+    syncUrls();
+    if (desiredOnline) { resetRos(true); connectRos(); reconnectMjpeg('host changed'); }
+  });
+  domRosUrl.addEventListener('change', () => {
+    domBottomRos.textContent = domRosUrl.value;
+    saveConfig();
+    if (desiredOnline) { resetRos(true); connectRos(); }
+  });
+  domMjpegUrl.addEventListener('change', () => {
+    domBottomMjpeg.textContent = domMjpegUrl.value;
+    saveConfig();
+    if (desiredOnline) reconnectMjpeg('url changed');
+  });
+
+  /* --- Connect / Disconnect --- */
+  domConnect.addEventListener('click', startSession);
+  domDisconnect.addEventListener('click', stopSession);
+
+  /* --- Apply buttons --- */
+  domCamBtn.addEventListener('click', applyCamera);
+  domTuneBtn.addEventListener('click', applyTuning);
+
+  /* --- Action buttons --- */
+  domActionOff.addEventListener('click', () => {
+    publishMode('OFF');
+    domBottomStatus.textContent = 'mode=OFF sent';
+  });
+  domActionFollow.addEventListener('click', () => {
+    publishMode('FOLLOW');
+    domBottomStatus.textContent = 'mode=FOLLOW sent (dry-run)';
+  });
+  domActionCheck.addEventListener('click', () => {
+    // Local check only — no ROS/SSH
+    const info = [];
+    info.push(`rosbridge: ${rosState}`);
+    info.push(`mjpeg: ${sessionState}`);
+    info.push(`mode: ${latestStatus ? latestStatus.mode : '-'}`);
+    info.push(`publishing: ${latestStatus ? latestStatus.publishing : '-'}`);
+    info.push(`enable_control: false (dry-run)`);
+    info.push(`cmd_speed: ${latestStatus ? latestStatus.speed_cmd : '-'}`);
+    info.push(`v_odom: ${latestStatus ? latestStatus.v_odom : '-'}`);
+    alert('Local Status Check:\n\n' + info.join('\n'));
+  });
+  domActionStop.addEventListener('click', () => {
+    // SAFETY: STOP only publishes /kt_follow/mode = OFF
+    // FORBIDDEN: /tianracer/ackermann_cmd publish
+    publishMode('OFF');
+    domBottomStatus.textContent = 'STOP → mode=OFF sent';
+  });
+
+  /* --- MJPEG image events --- */
+  domPreview.addEventListener('load', () => {
+    domPlaceholder.style.display = 'none';
+    drawOverlay();
+  });
+  domPreview.addEventListener('error', () => {
+    domPlaceholder.style.display = 'flex';
+    if (desiredOnline) { setSession('stale'); reconnectMjpeg('image error'); }
+  });
+  window.addEventListener('resize', drawOverlay);
+
+  /* --- Init connection --- */
+  const initCfg = loadConfig();
+  const initHost = initCfg ? initCfg.host : inferHost();
+  domHost.value = initHost;
+  syncUrls();
+  setSession('offline');
+  domCamBtn.disabled = true;
+  domTuneBtn.disabled = true;
+
+  // Auto-connect on load
+  startSession();
+</script>
 </body>
 </html>

@@ -17,11 +17,13 @@ import signal
 import sys
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Iterable, List, Optional, Sequence, Tuple
 
 import rclpy
 from ackermann_msgs.msg import AckermannDrive
 from ai_msgs.msg import PerceptionTargets
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -62,6 +64,9 @@ def rate_limit(current: float, target: float, rise_limit: float, fall_limit: flo
 class ControllerConfig:
     enable_control: bool = False
     scan_topic: str = "/tianracer/scan"
+    odom_topic: str = "/odom"
+    ackermann_cmd_topic: str = "/ackermann_cmd"
+    targets_topic: str = "/bear_detection/targets"
     image_width: float = 640.0
     image_center_x: float = 320.0
     horizontal_fov_deg: float = 70.0
@@ -69,10 +74,18 @@ class ControllerConfig:
     angle_window_deg: float = 8.0
     scan_range_min: float = 0.15
     scan_range_max: float = 3.0
-    target_distance_m: float = 1.0
-    stop_distance_m: float = 1.0
+    target_distance_m: float = 0.5
+    restart_distance_m: float = 0.7
+    stop_distance_m: float = 0.5
     full_speed_distance_m: float = 1.6
     max_speed: float = 0.25
+    min_effective_speed_mps: float = 0.30
+    slow_speed_mps: float = 0.35
+    fast_speed_mps: float = 0.50
+    stop_decel_mps2: float = 0.80
+    stop_margin_m: float = 0.08
+    max_valid_odom_age_ms: int = 200
+    max_valid_range_age_ms: int = 200
     max_steering_angle: float = 0.18
     k_steer: float = 0.85
     steer_sign: float = -1.0
@@ -112,6 +125,7 @@ class ControllerState:
     dist_filter_inited: bool = False
     speed_cmd: float = 0.0
     steering_cmd: float = 0.0
+    longitudinal_state: str = "IDLE"
 
 
 @dataclass
@@ -120,6 +134,24 @@ class FollowDecision:
     steer_cmd: float
     reason: str
     publishing: bool
+
+
+class LongitudinalState(str, Enum):
+    IDLE = "IDLE"
+    APPROACH_FAST = "APPROACH_FAST"
+    APPROACH_SLOW = "APPROACH_SLOW"
+    BRAKE = "BRAKE"
+    HOLD = "HOLD"
+
+
+@dataclass
+class LongitudinalDecision:
+    state: LongitudinalState
+    cmd_speed: float
+    range_m: Optional[float]
+    v_odom: float
+    s_remain: Optional[float]
+    s_stop: Optional[float]
 
 
 @dataclass
@@ -133,6 +165,115 @@ def percentile(sorted_values: Sequence[float], q: float) -> float:
         raise ValueError("percentile requires non-empty input")
     index = int(math.floor((len(sorted_values) - 1) * q))
     return sorted_values[index]
+
+
+def longitudinal_speed_limit(config: ControllerConfig) -> float:
+    return max(
+        float(config.max_speed),
+        float(config.min_effective_speed_mps),
+        float(config.slow_speed_mps),
+        float(config.fast_speed_mps),
+    )
+
+
+def normalize_positive_speed(speed: float, min_effective_speed_mps: float) -> float:
+    if speed <= 0.0:
+        return 0.0
+    if speed < min_effective_speed_mps:
+        return float(min_effective_speed_mps)
+    return float(speed)
+
+
+def enforce_speed_deadband(speed_cmd: float, speed_target: float, min_effective_speed_mps: float) -> float:
+    if speed_cmd <= 0.0 or min_effective_speed_mps <= 0.0:
+        return max(0.0, float(speed_cmd))
+    if speed_cmd < min_effective_speed_mps:
+        if speed_target > 0.0:
+            return float(min_effective_speed_mps)
+        return 0.0
+    return float(speed_cmd)
+
+
+def compute_longitudinal_step(
+    current_state: LongitudinalState,
+    config: ControllerConfig,
+    range_m: Optional[float],
+    v_odom: Optional[float],
+    range_is_valid: bool,
+    odom_is_fresh: bool,
+) -> LongitudinalDecision:
+    if (
+        not range_is_valid
+        or range_m is None
+        or not math.isfinite(range_m)
+        or range_m < config.scan_range_min
+        or range_m > config.scan_range_max
+        or v_odom is None
+        or not math.isfinite(v_odom)
+        or not odom_is_fresh
+    ):
+        return LongitudinalDecision(
+            state=LongitudinalState.IDLE,
+            cmd_speed=0.0,
+            range_m=range_m,
+            v_odom=0.0 if v_odom is None or not math.isfinite(v_odom) else abs(float(v_odom)),
+            s_remain=None,
+            s_stop=None,
+        )
+
+    v_odom = abs(float(v_odom))
+    s_remain = float(range_m) - float(config.target_distance_m)
+    stop_decel_mps2 = max(float(config.stop_decel_mps2), 1e-6)
+    s_stop = (v_odom * v_odom) / (2.0 * stop_decel_mps2) + float(config.stop_margin_m)
+
+    if current_state == LongitudinalState.HOLD and range_m < config.restart_distance_m:
+        return LongitudinalDecision(
+            state=LongitudinalState.HOLD,
+            cmd_speed=0.0,
+            range_m=float(range_m),
+            v_odom=v_odom,
+            s_remain=s_remain,
+            s_stop=s_stop,
+        )
+
+    if s_remain <= 0.0:
+        return LongitudinalDecision(
+            state=LongitudinalState.HOLD,
+            cmd_speed=0.0,
+            range_m=float(range_m),
+            v_odom=v_odom,
+            s_remain=s_remain,
+            s_stop=s_stop,
+        )
+
+    if s_remain <= s_stop:
+        return LongitudinalDecision(
+            state=LongitudinalState.BRAKE,
+            cmd_speed=0.0,
+            range_m=float(range_m),
+            v_odom=v_odom,
+            s_remain=s_remain,
+            s_stop=s_stop,
+        )
+
+    if range_m > (config.target_distance_m + 1.0):
+        return LongitudinalDecision(
+            state=LongitudinalState.APPROACH_FAST,
+            cmd_speed=normalize_positive_speed(config.fast_speed_mps, config.min_effective_speed_mps),
+            range_m=float(range_m),
+            v_odom=v_odom,
+            s_remain=s_remain,
+            s_stop=s_stop,
+        )
+
+    return LongitudinalDecision(
+        state=LongitudinalState.APPROACH_SLOW,
+        cmd_speed=normalize_positive_speed(config.slow_speed_mps, config.min_effective_speed_mps),
+        range_m=float(range_m),
+        v_odom=v_odom,
+        s_remain=s_remain,
+        s_stop=s_stop,
+    )
 
 
 def select_bear_target(detections: Iterable[Any], min_confidence: float) -> Optional[dict]:
@@ -250,9 +391,12 @@ def compute_follow_step(
     now: float,
     target_theta: Optional[float],
     target_distance: Optional[float],
+    v_odom: Optional[float],
     valid_scan_pts: int,
     target_is_fresh: bool,
     scan_is_fresh: bool,
+    odom_is_fresh: bool,
+    range_is_valid: bool,
     dt: float,
 ) -> FollowDecision:
     should_compute = mode == "FOLLOW"
@@ -301,15 +445,16 @@ def compute_follow_step(
         reason = "no_valid_scan"
     else:
         reason = "ok"
-        if state.dist_filtered is None or state.dist_filtered <= config.stop_distance_m:
-            speed_target = 0.0
-        elif state.dist_filtered >= config.full_speed_distance_m:
-            speed_target = config.max_speed
-        else:
-            x = (state.dist_filtered - config.stop_distance_m) / (
-                config.full_speed_distance_m - config.stop_distance_m
-            )
-            speed_target = config.max_speed * smoothstep(x)
+        longitudinal_decision = compute_longitudinal_step(
+            current_state=LongitudinalState(state.longitudinal_state),
+            config=config,
+            range_m=target_distance,
+            v_odom=v_odom,
+            range_is_valid=range_is_valid,
+            odom_is_fresh=odom_is_fresh,
+        )
+        state.longitudinal_state = longitudinal_decision.state.value
+        speed_target = longitudinal_decision.cmd_speed
 
         steering_target = clamp(
             config.steer_sign * config.k_steer * state.theta_filtered,
@@ -335,8 +480,14 @@ def compute_follow_step(
             dt,
         )
         state.speed_cmd = 0.0
+        state.longitudinal_state = LongitudinalState.IDLE.value
 
-    state.speed_cmd = clamp(state.speed_cmd, 0.0, config.max_speed)
+    state.speed_cmd = clamp(state.speed_cmd, 0.0, longitudinal_speed_limit(config))
+    state.speed_cmd = enforce_speed_deadband(
+        state.speed_cmd,
+        speed_target,
+        config.min_effective_speed_mps,
+    )
     state.steering_cmd = clamp(
         state.steering_cmd,
         -config.max_steering_angle,
@@ -365,9 +516,11 @@ class FollowControllerV4(Node):
         self.current_target: Optional[dict] = None
         self.current_theta_raw: Optional[float] = None
         self.current_dist_raw: Optional[float] = None
+        self.current_odom_speed_mps: float = 0.0
         self.current_valid_scan_pts: int = 0
         self.last_target_time = 0.0
         self.last_scan_time = 0.0
+        self.last_odom_time = 0.0
         self.last_scan_angle_min: Optional[float] = None
         self.last_scan_angle_max: Optional[float] = None
         self.last_scan_angle_increment: Optional[float] = None
@@ -380,13 +533,14 @@ class FollowControllerV4(Node):
             durability=DurabilityPolicy.VOLATILE,
         )
 
-        self.cmd_pub = self.create_publisher(AckermannDrive, "/ackermann_cmd", qos_reliable)
+        self.cmd_pub = self.create_publisher(AckermannDrive, self.config.ackermann_cmd_topic, qos_reliable)
         self.tuning_status_pub = self.create_publisher(String, "/kt_follow/tuning_status", qos_reliable)
         self.status_pub = self.create_publisher(String, "/kt_follow/status", qos_reliable)
         self.create_subscription(String, "/kt_follow/mode", self._on_mode, qos_reliable)
         self.create_subscription(String, "/kt_follow/tuning", self._on_tuning, qos_reliable)
-        self.create_subscription(PerceptionTargets, "/bear_detection/targets", self._on_targets, make_sensor_data_qos())
+        self.create_subscription(PerceptionTargets, self.config.targets_topic, self._on_targets, make_sensor_data_qos())
         self.create_subscription(LaserScan, self.config.scan_topic, self._on_scan, make_sensor_data_qos())
+        self.create_subscription(Odometry, self.config.odom_topic, self._on_odom, make_sensor_data_qos())
 
         self.loop_dt = 1.0 / self.config.loop_hz
         self.timer = self.create_timer(self.loop_dt, self._control_loop)
@@ -395,11 +549,25 @@ class FollowControllerV4(Node):
         signal.signal(signal.SIGINT, self._sig_handler)
         signal.signal(signal.SIGTERM, self._sig_handler)
 
+        if self.config.slow_speed_mps < self.config.min_effective_speed_mps:
+            self.get_logger().warn(
+                "slow_speed_mps %.2f below min_effective_speed_mps %.2f, clamping"
+                % (self.config.slow_speed_mps, self.config.min_effective_speed_mps)
+            )
+            self.config.slow_speed_mps = self.config.min_effective_speed_mps
+        if self.config.fast_speed_mps < self.config.min_effective_speed_mps:
+            self.get_logger().warn(
+                "fast_speed_mps %.2f below min_effective_speed_mps %.2f, clamping"
+                % (self.config.fast_speed_mps, self.config.min_effective_speed_mps)
+            )
+            self.config.fast_speed_mps = self.config.min_effective_speed_mps
+
         self.get_logger().info(
-            "kt_follow_controller_v4 started enable_control=%s scan_topic=%s max_speed=%.2f max_steering_angle=%.2f"
+            "kt_follow_controller_v4 started enable_control=%s scan_topic=%s odom_topic=%s max_speed=%.2f max_steering_angle=%.2f"
             % (
                 self.config.enable_control,
                 self.config.scan_topic,
+                self.config.odom_topic,
                 self.config.max_speed,
                 self.config.max_steering_angle,
             )
@@ -450,6 +618,10 @@ class FollowControllerV4(Node):
         )
         self.current_dist_raw = result.distance
         self.current_valid_scan_pts = result.valid_scan_pts
+
+    def _on_odom(self, msg: Odometry) -> None:
+        self.last_odom_time = time.time()
+        self.current_odom_speed_mps = abs(float(msg.twist.twist.linear.x))
 
     def _publish_tuning_status(self, ok: bool, message: str) -> None:
         payload = {
@@ -563,6 +735,7 @@ class FollowControllerV4(Node):
         payload = {
             "mode": self.state.mode,
             "scan_topic": self.config.scan_topic,
+            "odom_topic": self.config.odom_topic,
             "roi_cx": None if target is None else round(float(target["roi_cx"]), 1),
             "roi_cy": None if target is None else round(float(target["roi_cy"]), 1),
             "theta_raw": None if self.current_theta_raw is None else round(float(self.current_theta_raw), 4),
@@ -580,12 +753,15 @@ class FollowControllerV4(Node):
             "scan_range_count": int(self.last_scan_count),
             "speed_cmd": round(float(self.state.speed_cmd), 4),
             "steer_cmd": round(float(self.state.steering_cmd), 4),
+            "v_odom": round(float(self.current_odom_speed_mps), 4),
+            "longitudinal_state": self.state.longitudinal_state,
             "reason": self.status_snapshot.reason,
             "publishing": bool(self.status_snapshot.publishing),
             "max_speed": round(float(self.config.max_speed), 3),
             "max_steering_angle": round(float(self.config.max_steering_angle), 3),
             "target_age_ms": self._age_ms(self.last_target_time, now),
             "scan_age_ms": self._age_ms(self.last_scan_time, now),
+            "odom_age_ms": self._age_ms(self.last_odom_time, now),
         }
         self.status_pub.publish(String(data=json.dumps(payload, ensure_ascii=True)))
 
@@ -606,6 +782,17 @@ class FollowControllerV4(Node):
 
         target_fresh = (now - self.last_target_time) < self.config.target_grace_sec
         scan_fresh = (now - self.last_scan_time) < self.config.stale_stop_sec
+        odom_age_ms = self._age_ms(self.last_odom_time, now)
+        range_age_ms = self._age_ms(self.last_scan_time, now)
+        odom_fresh = odom_age_ms is not None and odom_age_ms <= self.config.max_valid_odom_age_ms
+        range_valid = (
+            self.current_dist_raw is not None
+            and math.isfinite(self.current_dist_raw)
+            and self.current_dist_raw >= self.config.scan_range_min
+            and self.current_valid_scan_pts > 0
+            and range_age_ms is not None
+            and range_age_ms <= self.config.max_valid_range_age_ms
+        )
 
         decision = compute_follow_step(
             state=self.state,
@@ -614,9 +801,12 @@ class FollowControllerV4(Node):
             now=now,
             target_theta=self.current_theta_raw,
             target_distance=self.current_dist_raw,
+            v_odom=self.current_odom_speed_mps,
             valid_scan_pts=self.current_valid_scan_pts,
             target_is_fresh=target_fresh,
             scan_is_fresh=scan_fresh,
+            odom_is_fresh=odom_fresh,
+            range_is_valid=range_valid,
             dt=self.loop_dt,
         )
         self.status_snapshot = StatusSnapshot(
@@ -635,8 +825,16 @@ class FollowControllerV4(Node):
             roi_cx = self.current_target["roi_cx"] if self.current_target else None
             theta_raw = self.current_theta_raw
             dist_raw = self.current_dist_raw
+            longitudinal = compute_longitudinal_step(
+                current_state=LongitudinalState(self.state.longitudinal_state),
+                config=self.config,
+                range_m=self.current_dist_raw,
+                v_odom=self.current_odom_speed_mps,
+                range_is_valid=range_valid,
+                odom_is_fresh=odom_fresh,
+            )
             self.get_logger().info(
-                "mode=%s roi_cx=%s theta_raw=%s theta_filt=%.3f dist_raw=%s dist_filt=%s valid_scan_pts=%d speed_cmd=%.3f steer_cmd=%.3f reason=%s publishing=%s"
+                "mode=%s roi_cx=%s theta_raw=%s theta_filt=%.3f range_m=%s dist_filt=%s v_odom=%.3f s_remain=%s s_stop=%s long_state=%s valid_scan_pts=%d cmd_speed=%.3f steer_cmd=%.3f reason=%s publishing=%s"
                 % (
                     self.state.mode,
                     "None" if roi_cx is None else "%.1f" % roi_cx,
@@ -644,6 +842,10 @@ class FollowControllerV4(Node):
                     self.state.theta_filtered,
                     "None" if dist_raw is None else "%.3f" % dist_raw,
                     "None" if self.state.dist_filtered is None else "%.3f" % self.state.dist_filtered,
+                    self.current_odom_speed_mps,
+                    "None" if longitudinal.s_remain is None else "%.3f" % longitudinal.s_remain,
+                    "None" if longitudinal.s_stop is None else "%.3f" % longitudinal.s_stop,
+                    longitudinal.state.value,
                     self.current_valid_scan_pts,
                     decision.speed_cmd,
                     decision.steer_cmd,
@@ -657,10 +859,19 @@ def parse_args(argv: Sequence[str]) -> ControllerConfig:
     parser = argparse.ArgumentParser(description="KT demo follow controller v4")
     parser.add_argument("--enable-control", type=str, default="false")
     parser.add_argument("--scan-topic", type=str, default="/tianracer/scan")
-    parser.add_argument("--target-distance-m", type=float, default=1.0)
-    parser.add_argument("--stop-distance-m", type=float, default=1.0)
+    parser.add_argument("--odom-topic", type=str, default="/odom")
+    parser.add_argument("--target-distance-m", type=float, default=0.5)
+    parser.add_argument("--restart-distance-m", type=float, default=0.7)
+    parser.add_argument("--stop-distance-m", type=float, default=0.5)
     parser.add_argument("--full-speed-distance-m", type=float, default=1.6)
     parser.add_argument("--max-speed", type=float, default=0.25)
+    parser.add_argument("--min-effective-speed-mps", type=float, default=0.30)
+    parser.add_argument("--slow-speed-mps", type=float, default=0.35)
+    parser.add_argument("--fast-speed-mps", type=float, default=0.50)
+    parser.add_argument("--stop-decel-mps2", type=float, default=0.80)
+    parser.add_argument("--stop-margin-m", type=float, default=0.08)
+    parser.add_argument("--max-valid-odom-age-ms", type=int, default=200)
+    parser.add_argument("--max-valid-range-age-ms", type=int, default=200)
     parser.add_argument("--max-steering-angle", type=float, default=0.18)
     parser.add_argument("--max-accel", type=float, default=0.60)
     parser.add_argument("--max-decel", type=float, default=1.20)
@@ -671,15 +882,29 @@ def parse_args(argv: Sequence[str]) -> ControllerConfig:
     parser.add_argument("--target-grace-sec", type=float, default=0.25)
     parser.add_argument("--stale-stop-sec", type=float, default=0.45)
     parser.add_argument("--angle-window-deg", type=float, default=8.0)
-    args = parser.parse_args(argv)
+    parser.add_argument("--ackermann-cmd-topic", type=str, default="/ackermann_cmd")
+    parser.add_argument("--targets-topic", type=str, default="/bear_detection/targets")
+    # Strip ROS2 launch-injected args (--ros-args, -r, etc.) before argparse
+    from rclpy.utilities import remove_ros_args
+    non_ros_argv = remove_ros_args(args=list(argv))
+    args = parser.parse_args(non_ros_argv)
 
     return ControllerConfig(
         enable_control=args.enable_control.lower() in ("1", "true", "yes"),
         scan_topic=args.scan_topic,
+        odom_topic=args.odom_topic,
         target_distance_m=args.target_distance_m,
+        restart_distance_m=args.restart_distance_m,
         stop_distance_m=args.stop_distance_m,
         full_speed_distance_m=args.full_speed_distance_m,
         max_speed=args.max_speed,
+        min_effective_speed_mps=args.min_effective_speed_mps,
+        slow_speed_mps=args.slow_speed_mps,
+        fast_speed_mps=args.fast_speed_mps,
+        stop_decel_mps2=args.stop_decel_mps2,
+        stop_margin_m=args.stop_margin_m,
+        max_valid_odom_age_ms=args.max_valid_odom_age_ms,
+        max_valid_range_age_ms=args.max_valid_range_age_ms,
         max_steering_angle=args.max_steering_angle,
         max_accel=args.max_accel,
         max_decel=args.max_decel,
@@ -690,6 +915,8 @@ def parse_args(argv: Sequence[str]) -> ControllerConfig:
         target_grace_sec=args.target_grace_sec,
         stale_stop_sec=args.stale_stop_sec,
         angle_window_deg=args.angle_window_deg,
+        ackermann_cmd_topic=args.ackermann_cmd_topic,
+        targets_topic=args.targets_topic,
     )
 
 
