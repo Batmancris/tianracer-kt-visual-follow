@@ -80,8 +80,15 @@
     /* --- Main Layout --- */
     .main-layout {
       display: grid;
-      grid-template-columns: 70% 30%;
+      grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
       height: calc(100vh - 42px - 30px - 48px);
+      overflow: hidden;
+    }
+    .left-debug-area {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      min-width: 0;
+      min-height: 0;
     }
     /* --- Left Video Area --- */
     .video-area {
@@ -89,6 +96,7 @@
       display: flex; align-items: center; justify-content: center;
       background: #000; overflow: hidden;
       border-right: 1px solid var(--line);
+      min-width: 0; min-height: 0;
     }
     .video-stage {
       position: relative;
@@ -123,6 +131,7 @@
       overflow-y: auto; overflow-x: hidden;
       padding: 8px; gap: 8px;
       background: rgba(7,18,25,0.6);
+      min-width: 400px;
     }
     .card {
       border: 1px solid var(--line);
@@ -166,6 +175,39 @@
     .age-warn  { color: var(--amber); font-weight: 700; }
     .age-alert { color: var(--red); font-weight: 700; }
     .note { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    /* --- Fusion Diagnostics Card --- */
+    .fusion-card {
+      border: 1px solid rgba(113,216,215,0.4);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(16,35,46,0.95);
+    }
+    .fusion-card h3 {
+      margin: 0 0 6px; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--cyan);
+    }
+    .fusion-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 4px; font-size: 12px;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+    .fusion-row .label { color: var(--muted); }
+    .fusion-row .value { font-family: Consolas, "Courier New", monospace; }
+    .fusion-verdict {
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .fusion-verdict.ok { background: rgba(152,217,108,0.18); color: var(--green); }
+    .fusion-verdict.warn { background: rgba(230,189,88,0.18); color: var(--amber); }
+    .fusion-verdict.alert { background: rgba(215,107,107,0.18); color: var(--red); }
+    .fusion-verdict.none { background: rgba(90,138,154,0.12); color: var(--blue-gray); }
     /* --- Sliders --- */
     .slider-row {
       display: grid; grid-template-columns: 90px 60px 1fr;
@@ -222,6 +264,33 @@
       font-size: 11px; color: var(--red);
       line-height: 1.4;
     }
+    /* --- LiDAR Area --- */
+    .lidar-area {
+      position: relative;
+      display: flex; flex-direction: column;
+      background: #0a0e12; overflow: hidden;
+      border-right: 1px solid var(--line);
+      min-width: 0; min-height: 0;
+    }
+    .lidar-title {
+      padding: 6px 10px; font-size: 12px; font-weight: 700;
+      color: var(--cyan); text-transform: uppercase; letter-spacing: 0.5px;
+      background: rgba(7,18,25,0.8); border-bottom: 1px solid var(--line);
+    }
+    .lidar-canvas-wrap {
+      flex: 1; position: relative; overflow: hidden;
+    }
+    #lidarCanvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; display: block;
+    }
+    .lidar-placeholder {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; color: var(--muted); font-size: 12px;
+      padding: 16px; line-height: 1.5;
+      background: rgba(0,0,0,0.3);
+    }
     /* --- Mono --- */
     .mono { font-family: Consolas, "Courier New", monospace; word-break: break-all; }
   </style>
@@ -241,7 +310,7 @@
   <!-- Badge Strip -->
   <div class="badge-strip">
     <span id="badge-ros" class="badge cyan">ROS DISCONNECTED</span>
-    <span id="badge-dryrun" class="badge amber">DRY-RUN ONLY</span>
+    <span id="badge-dryrun" class="badge amber"></span>
     <span id="badge-mode" class="badge bgray">OFF</span>
     <span id="badge-reason" class="badge bgray">-</span>
     <span id="badge-session" class="badge bgray">OFFLINE</span>
@@ -249,8 +318,10 @@
 
   <!-- Main Layout -->
   <div class="main-layout">
-    <!-- Left: Video Area -->
-    <div class="video-area">
+    <!-- Left Debug Area: Video + LiDAR -->
+    <div class="left-debug-area">
+      <!-- Video Area -->
+      <div class="video-area">
       <div class="video-stage">
         <img id="previewImage" alt="KT MJPEG preview">
         <canvas id="overlay"></canvas>
@@ -261,10 +332,23 @@
       </div>
       <div class="video-badge">
         <span id="vid-badge-ros" class="badge cyan" style="font-size:10px;">ROS DISCONNECTED</span>
-        <span id="vid-badge-dryrun" class="badge amber" style="font-size:10px;">DRY-RUN</span>
+        <span id="vid-badge-dryrun" class="badge amber" style="font-size:10px;"></span>
         <span id="vid-badge-follow" class="badge bgray" style="font-size:10px;">OFF</span>
       </div>
     </div>
+
+    <!-- Middle: LiDAR Top View -->
+    <div class="lidar-area">
+      <div class="lidar-title">LiDAR Top View</div>
+      <div class="lidar-canvas-wrap">
+        <canvas id="lidarCanvas"></canvas>
+        <div id="lidar-placeholder" class="lidar-placeholder">
+          Waiting for /tianracer/scan data...
+        </div>
+      </div>
+    </div>
+
+    </div> <!-- /left-debug-area -->
 
     <!-- Right Panel -->
     <div class="right-panel" id="right-panel">
@@ -304,7 +388,7 @@
         <div class="kv"><span class="label">odom speed</span><span id="cmd-odom" class="value">-</span></div>
         <div class="kv"><span class="label">actual steering</span><span id="cmd-actual-steer" class="value">N/A</span></div>
         <div class="note">actual steering: base does not expose steering feedback topic yet</div>
-        <div class="note" style="margin-top:3px;">contract: /tianracer/ackermann_cmd when enabled; dry-run sends nothing</div>
+        <div class="note" style="margin-top:3px;">contract: /tianracer/ackermann_cmd when enable_control=true</div>
       </div>
 
       <!-- Camera Card -->
@@ -332,7 +416,6 @@
       <div class="card">
         <h3>Safety</h3>
         <div class="safety-banner">
-          <b>DRY-RUN ONLY</b> &mdash; enable_control=false. No /tianracer/ackermann_cmd published from this console.
           STOP publishes /kt_follow/mode=OFF only.
         </div>
         <div class="kv" style="margin-top:6px;"><span class="label">dist_filt</span><span id="sv-dist" class="value">-</span></div>
@@ -340,13 +423,47 @@
         <div class="kv"><span class="label">roi_cx / cy</span><span id="sv-roi" class="value">-</span></div>
         <div class="kv"><span class="label">v_odom</span><span id="sv-vodom" class="value">-</span></div>
       </div>
+
+      <!-- Fusion Debug Card -->
+      <div class="card">
+        <h3>Fusion Debug</h3>
+        <div class="kv"><span class="label">theta_lidar_center</span><span id="fd-theta-lc" class="value">N/A</span></div>
+        <div class="kv"><span class="label">sector_half_angle</span><span id="fd-sector-half" class="value">N/A</span></div>
+        <div class="kv"><span class="label">sector_points</span><span id="fd-sector-pts" class="value">N/A</span></div>
+        <div class="kv"><span class="label">cluster_count</span><span id="fd-cluster-count" class="value">N/A</span></div>
+        <div class="kv"><span class="label">selected_cluster_range</span><span id="fd-sel-range" class="value">N/A</span></div>
+        <div class="kv"><span class="label">selected_cluster_angle</span><span id="fd-sel-angle" class="value">N/A</span></div>
+        <div class="kv"><span class="label">selected_cluster_score</span><span id="fd-sel-score" class="value">N/A</span></div>
+        <div class="kv"><span class="label">selected_cluster_reason</span><span id="fd-sel-reason" class="value">N/A</span></div>
+        <div class="kv"><span class="label">selected_cluster_reject</span><span id="fd-sel-reject" class="value">N/A</span></div>
+        <div class="kv"><span class="label">bbox_depth_m</span><span id="fd-bbox-depth" class="value">N/A</span></div>
+        <div class="kv"><span class="label">bbox_depth_err</span><span id="fd-bbox-err" class="value">N/A</span></div>
+        <div class="kv" style="grid-template-columns: 110px 1fr;"><span class="label">clusters_dbg</span><span id="fd-clusters-dbg" class="value mono" style="font-size:10px; max-height:48px; overflow:auto; white-space:pre-wrap;">N/A</span></div>
+      </div>
+
+      <!-- Visual-LiDAR Fusion Diagnostics -->
+      <div class="card fusion-card">
+        <h3>Visual-LiDAR Fusion Diagnostics</h3>
+        <div class="fusion-row"><span class="label">visual_bearing_rad</span><span id="fus-bearing-rad" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">visual_bearing_deg</span><span id="fus-bearing-deg" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">sector_min_dist</span><span id="fus-sector-min" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">sector_point_count</span><span id="fus-sector-pts" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">sector_density</span><span id="fus-sector-density" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">wall_suspicion</span><span id="fus-wall" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">foreground_suspicion</span><span id="fus-fg" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">fusion_distance</span><span id="fus-dist" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">fusion_confidence</span><span id="fus-conf" class="value">N/A</span></div>
+        <div class="fusion-row"><span class="label">reject_reason</span><span id="fus-reject" class="value">-</span></div>
+        <div class="fusion-row"><span class="label">selected_reason</span><span id="fus-selected" class="value">-</span></div>
+        <div id="fus-verdict" class="fusion-verdict none">NO TARGET</div>
+      </div>
     </div> <!-- /right-panel -->
   </div> <!-- /main-layout -->
 
   <!-- Bottom Fixed Action Bar -->
   <div class="bottom-bar">
     <button class="action-btn off-btn" id="action-off">OFF</button>
-    <button class="action-btn follow-btn" id="action-follow">DRY-RUN FOLLOW</button>
+    <button class="action-btn follow-btn" id="action-follow">FOLLOW</button>
     <button class="action-btn check-btn" id="action-check">CHECK</button>
     <button class="action-btn stop-btn" id="action-stop">STOP</button>
     <span class="spacer"></span>
@@ -383,6 +500,7 @@
     mode: '/kt_follow/mode',
     tuning: '/kt_follow/tuning',
     camera: '/kt_camera/control',
+    scan: '/tianracer/scan',
   };
 
   /* --- DOM Refs --- */
@@ -466,6 +584,39 @@
   const domSVRoi   = $('sv-roi');
   const domSVVodom = $('sv-vodom');
 
+  // LiDAR
+  const domLidarCanvas = $('lidarCanvas');
+  const lidarCtx = domLidarCanvas.getContext('2d');
+  const domLidarPlaceholder = $('lidar-placeholder');
+
+  // Fusion Debug
+  const domFDThetaLC    = $('fd-theta-lc');
+  const domFDSectorHalf = $('fd-sector-half');
+  const domFDSectorPts  = $('fd-sector-pts');
+  const domFDClusterCnt = $('fd-cluster-count');
+  const domFDSelRange   = $('fd-sel-range');
+  const domFDSelAngle   = $('fd-sel-angle');
+  const domFDSelScore   = $('fd-sel-score');
+  const domFDSelReason  = $('fd-sel-reason');
+  const domFDSelReject  = $('fd-sel-reject');
+  const domFDBboxDepth  = $('fd-bbox-depth');
+  const domFDBboxErr    = $('fd-bbox-err');
+  const domFDClustersDbg= $('fd-clusters-dbg');
+
+  // Fusion Diagnostics
+  const domFusBearingRad = $('fus-bearing-rad');
+  const domFusBearingDeg = $('fus-bearing-deg');
+  const domFusSectorMin = $('fus-sector-min');
+  const domFusSectorPts = $('fus-sector-pts');
+  const domFusSectorDensity = $('fus-sector-density');
+  const domFusWall = $('fus-wall');
+  const domFusFg = $('fus-fg');
+  const domFusDist = $('fus-dist');
+  const domFusConf = $('fus-conf');
+  const domFusReject = $('fus-reject');
+  const domFusSelected = $('fus-selected');
+  const domFusVerdict = $('fus-verdict');
+
   // Bottom bar
   const domActionOff    = $('action-off');
   const domActionFollow = $('action-follow');
@@ -495,13 +646,15 @@
   // Topics
   let tMode = null, tTuning = null, tCamera = null;
   let tTargets = null, tStatus = null, tTuningStat = null, tCameraStat = null;
+  let tScan = null;
 
   // Counters
-  let targetFrames = 0, overlayFrames = 0, statusFrames = 0;
+  let targetFrames = 0, overlayFrames = 0, statusFrames = 0, scanFrames = 0;
 
   // Latest data
   let latestStatus = null;
   let latestStatusAt = 0;
+  let latestScan = null;
   let latestMjpegStatus = null;
   let latestMjpegStatusAt = 0;
   let targetHistory = [];
@@ -577,13 +730,188 @@
     if (+ms > 500) el.className = 'value age-alert';
     else if (+ms > 200) el.className = 'value age-warn';
   }
+
+  /* ============================================
+     Fragment 62: Visual-LiDAR Fusion Computation
+     Client-side only — no control output
+     ============================================ */
+
+  const FUSION_CFG = {
+    camera_hfov_deg: 60,         // estimated horizontal FOV
+    sector_half_deg: 15,         // sector half-angle for analysis
+    wall_span_threshold_deg: 25, // angular span > this → suspect wall
+    wall_dist_cv_threshold: 0.1, // coefficient of variation < this → suspect wall
+    min_foreground_pts: 2,       // minimum points for foreground cluster
+    foreground_gap_m: 0.2,       // gap from background to count as foreground
+  };
+
+  let fusionResult = {
+    visual_bearing_rad: null,
+    visual_bearing_deg: null,
+    sector_min_dist: null,
+    sector_point_count: 0,
+    sector_density: 0,
+    wall_suspicion: 0,
+    foreground_suspicion: 0,
+    fusion_distance: null,
+    fusion_confidence: 0,
+    reject_reason: '-',
+    selected_reason: '-',
+    sector_points: [],
+  };
+
+  function computeVisualBearing() {
+    if (!targetHistory.length) return null;
+    const latest = targetHistory[targetHistory.length - 1];
+    if (!latest || !latest.targets || !latest.targets.length) return null;
+
+    const target = latest.targets[0];
+    const roi = target.rois && target.rois[0];
+    if (!roi || !roi.rect) return null;
+
+    const rect = roi.rect;
+    const bbox_center_x = rect.x_offset + rect.width / 2;
+
+    // Map pixel to angle: center = 0 rad, edges = ±hfov/2
+    const hfov_rad = FUSION_CFG.camera_hfov_deg * Math.PI / 180;
+    const normalized = (bbox_center_x - SRC_W / 2) / (SRC_W / 2);
+    const bearing_rad = normalized * (hfov_rad / 2);
+
+    return {
+      bearing_rad,
+      bearing_deg: bearing_rad * 180 / Math.PI,
+      confidence: roi.confidence || 0,
+      bbox_center_x,
+    };
+  }
+
+  function analyzeLidarSector(bearing_rad) {
+    if (!latestScan || !latestScan.ranges || !bearing_rad) return [];
+
+    const sector_half = FUSION_CFG.sector_half_deg * Math.PI / 180;
+    const points = [];
+
+    for (let i = 0; i < latestScan.ranges.length; i++) {
+      const r = latestScan.ranges[i];
+      if (!Number.isFinite(r)) continue;
+      if (r < latestScan.range_min || r > latestScan.range_max) continue;
+
+      const angle = latestScan.angle_min + i * latestScan.angle_increment;
+      const diff = Math.abs(angle - bearing_rad);
+
+      if (diff <= sector_half) {
+        points.push({ index: i, angle, range: r, angle_diff: diff });
+      }
+    }
+
+    return points;
+  }
+
+  function detectWall(sector_points) {
+    if (sector_points.length < 3) return 0;
+
+    const angles = sector_points.map(p => p.angle);
+    const span_deg = (Math.max(...angles) - Math.min(...angles)) * 180 / Math.PI;
+
+    const ranges = sector_points.map(p => p.range);
+    const mean = ranges.reduce((a, b) => a + b, 0) / ranges.length;
+    const variance = ranges.reduce((a, b) => a + (b - mean) ** 2, 0) / ranges.length;
+    const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
+
+    let suspicion = 0;
+    if (span_deg > FUSION_CFG.wall_span_threshold_deg) suspicion += 0.5;
+    if (cv < FUSION_CFG.wall_dist_cv_threshold) suspicion += 0.3;
+    if (sector_points.length > 10) suspicion += 0.2;
+
+    return Math.min(1, suspicion);
+  }
+
+  function detectForeground(sector_points) {
+    if (sector_points.length < FUSION_CFG.min_foreground_pts) return 0;
+
+    const sorted = [...sector_points].sort((a, b) => a.range - b.range);
+    if (sorted.length < 2) return 0;
+
+    const nearest_range = sorted[0].range;
+    const bg_range = sorted[sorted.length - 1].range;
+    const gap = bg_range - nearest_range;
+
+    const near_cluster = sorted.filter(p => p.range - nearest_range < FUSION_CFG.foreground_gap_m);
+
+    if (gap > FUSION_CFG.foreground_gap_m && near_cluster.length >= FUSION_CFG.min_foreground_pts) {
+      return Math.min(1, 0.5 + near_cluster.length / sorted.length * 0.5);
+    }
+
+    return 0;
+  }
+
+  function computeFusion() {
+    const bearing = computeVisualBearing();
+
+    if (!bearing) {
+      fusionResult = {
+        visual_bearing_rad: null, visual_bearing_deg: null,
+        sector_min_dist: null, sector_point_count: 0, sector_density: 0,
+        wall_suspicion: 0, foreground_suspicion: 0,
+        fusion_distance: null, fusion_confidence: 0,
+        reject_reason: 'no_visual_target', selected_reason: '-',
+        sector_points: [],
+      };
+      return;
+    }
+
+    const sector_points = analyzeLidarSector(bearing.bearing_rad);
+    const wall_score = detectWall(sector_points);
+    const ranges = sector_points.map(p => p.range);
+    const min_dist = ranges.length > 0 ? Math.min(...ranges) : null;
+    const fg_score = detectForeground(sector_points);
+
+    const sector_half_rad = FUSION_CFG.sector_half_deg * Math.PI / 180;
+    const density = sector_points.length / (sector_half_rad * 2);
+
+    let fusion_dist = null;
+    let confidence = 0;
+    let reject_reason = '-';
+    let selected_reason = '-';
+
+    if (sector_points.length === 0) {
+      reject_reason = 'no_lidar_in_sector';
+      confidence = 0;
+    } else if (wall_score > 0.6) {
+      reject_reason = `wall_suspicion=${wall_score.toFixed(2)}`;
+      confidence = 0;
+    } else if (fg_score > 0.5) {
+      fusion_dist = min_dist;
+      confidence = Math.min(1, bearing.confidence * 0.5 + fg_score * 0.5);
+      selected_reason = `fg_score=${fg_score.toFixed(2)}`;
+    } else {
+      fusion_dist = min_dist;
+      confidence = bearing.confidence * 0.3;
+      selected_reason = 'ambiguous_sector';
+    }
+
+    fusionResult = {
+      visual_bearing_rad: bearing.bearing_rad,
+      visual_bearing_deg: bearing.bearing_deg,
+      sector_min_dist: min_dist,
+      sector_point_count: sector_points.length,
+      sector_density: density,
+      wall_suspicion: wall_score,
+      foreground_suspicion: fg_score,
+      fusion_distance: fusion_dist,
+      fusion_confidence: confidence,
+      reject_reason,
+      selected_reason,
+      sector_points,
+    };
+  }
   /* ============================================
      Fragment 50: ROS Bridge Connection & Subscriptions
      ============================================ */
 
   function clearTopics() {
-    [tTargets, tStatus, tTuningStat, tCameraStat].forEach(t => { try { t && t.unsubscribe(); } catch {} });
-    tMode = tTuning = tCamera = tTargets = tStatus = tTuningStat = tCameraStat = null;
+    [tTargets, tStatus, tTuningStat, tCameraStat, tScan].forEach(t => { try { t && t.unsubscribe(); } catch {} });
+    tMode = tTuning = tCamera = tTargets = tStatus = tTuningStat = tCameraStat = tScan = null;
   }
 
   function setRosBadge(txt, color) {
@@ -607,6 +935,7 @@
     camDirty.clear(); tuneDirty.clear();
     if (close && ros) { try { ros.close(); } catch {} }
     ros = null; rosState = 'offline';
+    latestScan = null;
     setRosBadge('ROS DISCONNECTED', 'red');
     domCamBtn.disabled = true;
     domTuneBtn.disabled = true;
@@ -713,6 +1042,7 @@
       tStatus   = new ROSLIB.Topic({ ros, name: T_TOPICS.status, messageType: 'std_msgs/msg/String' });
       tTuningStat = new ROSLIB.Topic({ ros, name: T_TOPICS.tuningStatus, messageType: 'std_msgs/msg/String' });
       tCameraStat = new ROSLIB.Topic({ ros, name: T_TOPICS.cameraStatus, messageType: 'std_msgs/msg/String' });
+      tScan       = new ROSLIB.Topic({ ros, name: T_TOPICS.scan, messageType: 'sensor_msgs/msg/LaserScan' });
 
       /* --- Subscribe: /bear_detection/targets --- */
       tTargets.subscribe((msg) => {
@@ -769,6 +1099,21 @@
         } catch {}
       });
 
+      /* --- Subscribe: /tianracer/scan --- */
+      tScan.subscribe((msg) => {
+        scanFrames++;
+        latestScan = {
+          angle_min: msg.angle_min,
+          angle_max: msg.angle_max,
+          angle_increment: msg.angle_increment,
+          range_min: msg.range_min,
+          range_max: msg.range_max,
+          ranges: msg.ranges || [],
+          stamp: msg.header && msg.header.stamp ? (msg.header.stamp.sec * 1000 + (msg.header.stamp.nanosec || 0) / 1e6) : null,
+        };
+        domLidarPlaceholder.style.display = 'none';
+      });
+
       domCamBtn.disabled = false;
       domTuneBtn.disabled = false;
       if (desiredOnline && mjpegRunning && latestMjpegStatus && !isMjpegStale(latestMjpegStatus)) setSession('live');
@@ -809,8 +1154,10 @@
     resetRos(true);
     setSession('offline');
     latestStatus = null; latestStatusAt = 0;
+    latestScan = null;
     domTuneStat.textContent = 'idle';
     domCamStat.textContent = 'idle';
+    domLidarPlaceholder.style.display = 'flex';
   }
 
   function setSession(s) {
@@ -938,6 +1285,381 @@
       ctx.restore();
     }
   }
+
+  /* ============================================
+     Fragment 65: LiDAR Top-Down Drawing
+     ============================================ */
+
+  function parseClustersDbg(str) {
+    if (!str || typeof str !== 'string') return [];
+    const clusters = [];
+    const parts = str.split(';');
+    for (const p of parts) {
+      const t = p.trim();
+      if (!t) continue;
+      const idxMatch = t.match(/^(\d+):/);
+      if (!idxMatch) continue;
+      const idx = parseInt(idxMatch[1], 10);
+      const aM = t.match(/a=([-\d.eE]+)/);
+      const rM = t.match(/r=([-\d.eE]+)/);
+      const pM = t.match(/p=(\d+)/);
+      const sM = t.match(/s=([-\d.eE]+)/);
+      clusters.push({
+        idx: idx,
+        angle: aM ? parseFloat(aM[1]) : NaN,
+        range: rM ? parseFloat(rM[1]) : NaN,
+        points: pM ? parseInt(pM[1], 10) : NaN,
+        score: sM ? parseFloat(sM[1]) : NaN,
+      });
+    }
+    return clusters;
+  }
+
+  function drawLidar() {
+    const W = domLidarCanvas.width = domLidarCanvas.parentElement.clientWidth || 400;
+    const H = domLidarCanvas.height = domLidarCanvas.parentElement.clientHeight || 400;
+    const c = lidarCtx;
+    c.clearRect(0, 0, W, H);
+
+    if (!latestScan || !latestScan.ranges || !latestScan.ranges.length) return;
+
+    const sc = latestStatus || {};
+    const scan = latestScan;
+
+    // Center of robot in canvas
+    const cx = W * 0.5;
+    const cy = H * 0.82;
+    const maxRange = 3.0;
+    const pxPerM = Math.min(cx, cy - 20) / maxRange;
+
+    // Helper: polar to canvas px
+    const toXY = (r, angle) => ({
+      px: cx + r * Math.sin(angle) * pxPerM,
+      py: cy - r * Math.cos(angle) * pxPerM,
+    });
+
+    // --- Background grid ---
+    c.save();
+    c.strokeStyle = 'rgba(113,216,215,0.12)';
+    c.lineWidth = 1;
+    for (let d = 0.5; d <= maxRange; d += 0.5) {
+      c.beginPath();
+      c.arc(cx, cy, d * pxPerM, 0, Math.PI * 2);
+      c.stroke();
+    }
+    // Range labels
+    c.fillStyle = 'rgba(113,216,215,0.3)';
+    c.font = '10px Consolas';
+    for (let d = 0.5; d <= maxRange; d += 0.5) {
+      c.fillText(`${d.toFixed(1)}m`, cx + 4, cy - d * pxPerM + 12);
+    }
+    c.restore();
+
+    // --- Axes ---
+    c.save();
+    c.strokeStyle = 'rgba(113,216,215,0.35)';
+    c.lineWidth = 1;
+    c.setLineDash([4, 3]);
+    // Forward (+x)
+    c.beginPath();
+    c.moveTo(cx, cy);
+    c.lineTo(cx, cy - maxRange * pxPerM - 10);
+    c.stroke();
+    // Left (+y)
+    c.beginPath();
+    c.moveTo(cx, cy);
+    c.lineTo(cx - maxRange * pxPerM - 10, cy);
+    c.stroke();
+    // Right (-y)
+    c.beginPath();
+    c.moveTo(cx, cy);
+    c.lineTo(cx + maxRange * pxPerM + 10, cy);
+    c.stroke();
+    c.restore();
+
+    // --- Axis labels ---
+    c.save();
+    c.fillStyle = 'rgba(113,216,215,0.5)';
+    c.font = '10px Segoe UI';
+    c.fillText('FWD', cx - 12, cy - maxRange * pxPerM - 14);
+    c.fillText('L', cx - maxRange * pxPerM - 18, cy + 4);
+    c.fillText('R', cx + maxRange * pxPerM + 6, cy + 4);
+    c.restore();
+
+    // --- Sector扇形 ---
+    const thetaLC = Number.isFinite(+sc.theta_lidar_center) ? +sc.theta_lidar_center : null;
+    const sectorHalf = Number.isFinite(+sc.sector_half_angle) ? +sc.sector_half_angle : null;
+    if (thetaLC !== null && sectorHalf !== null) {
+      c.save();
+      c.fillStyle = 'rgba(113,216,215,0.08)';
+      c.strokeStyle = 'rgba(113,216,215,0.35)';
+      c.lineWidth = 1;
+      const sectorR = maxRange * pxPerM;
+      const startA = -(thetaLC + sectorHalf) + Math.PI / 2;
+      const endA = -(thetaLC - sectorHalf) + Math.PI / 2;
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.arc(cx, cy, sectorR, startA, endA, false);
+      c.closePath();
+      c.fill();
+      c.stroke();
+      c.restore();
+    }
+
+    // --- Draw scan points ---
+    let minDist = Infinity, minDistAngle = 0;
+    for (let i = 0; i < scan.ranges.length; i++) {
+      const r = scan.ranges[i];
+      if (!Number.isFinite(r)) continue;
+      if (r < scan.range_min || r > scan.range_max) continue;
+      if (r > maxRange) continue;
+
+      const angle = scan.angle_min + i * scan.angle_increment;
+      const { px, py } = toXY(r, angle);
+
+      // Color coding
+      let color = 'rgba(180,195,205,0.55)'; // gray default
+      let radius = 2;
+
+      // Inside sector?
+      const inSector = thetaLC !== null && sectorHalf !== null &&
+        Math.abs(angle - thetaLC) <= sectorHalf;
+      if (inSector) {
+        color = 'rgba(100,200,240,0.75)';
+        radius = 2.5;
+      }
+
+      // Near selected_cluster_range?
+      const selR = Number.isFinite(+sc.selected_cluster_range) ? +sc.selected_cluster_range : null;
+      if (selR !== null && Math.abs(r - selR) < 0.15 && inSector) {
+        color = 'rgba(230,140,40,0.95)';
+        radius = 4;
+      }
+
+      // Track minimum distance in sector
+      if (inSector && r < minDist) {
+        minDist = r;
+        minDistAngle = angle;
+      }
+
+      c.beginPath();
+      c.arc(px, py, radius, 0, Math.PI * 2);
+      c.fillStyle = color;
+      c.fill();
+    }
+
+    // --- clusters_dbg overlay ---
+    const clusters = parseClustersDbg(sc.clusters_dbg);
+    for (const cl of clusters) {
+      if (!Number.isFinite(cl.angle) || !Number.isFinite(cl.range)) continue;
+      if (cl.range > maxRange) continue;
+      const { px, py } = toXY(cl.range, cl.angle);
+
+      // Circle
+      c.beginPath();
+      c.arc(px, py, 5, 0, Math.PI * 2);
+      c.strokeStyle = 'rgba(230,189,88,0.8)';
+      c.lineWidth = 1.5;
+      c.stroke();
+
+      // Index label
+      c.fillStyle = 'rgba(230,189,88,0.9)';
+      c.font = 'bold 9px Consolas';
+      c.fillText(String(cl.idx), px + 7, py - 5);
+
+      // Score label
+      if (Number.isFinite(cl.score)) {
+        c.fillStyle = 'rgba(230,189,88,0.6)';
+        c.font = '8px Consolas';
+        c.fillText(cl.score.toFixed(3), px + 7, py + 6);
+      }
+    }
+
+    // --- selected_cluster highlight ---
+    const selAngle = Number.isFinite(+sc.selected_cluster_angle) ? +sc.selected_cluster_angle : null;
+    const selRange = Number.isFinite(+sc.selected_cluster_range) ? +sc.selected_cluster_range : null;
+    if (selAngle !== null && selRange !== null && selRange <= maxRange) {
+      const { px: spx, py: spy } = toXY(selRange, selAngle);
+
+      // Direction line from robot to selected point
+      c.save();
+      c.strokeStyle = 'rgba(230,140,40,0.8)';
+      c.lineWidth = 2;
+      c.setLineDash([]);
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.lineTo(spx, spy);
+      c.stroke();
+      c.restore();
+
+      // Big orange dot
+      c.beginPath();
+      c.arc(spx, spy, 6, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(230,140,40,0.9)';
+      c.fill();
+      c.strokeStyle = '#fff';
+      c.lineWidth = 1.5;
+      c.stroke();
+
+      // Label
+      c.fillStyle = '#e6bd58';
+      c.font = 'bold 10px Segoe UI';
+      c.fillText(`${selRange.toFixed(2)}m`, spx + 10, spy - 2);
+    }
+
+    // --- theta_lidar_center direction line ---
+    if (thetaLC !== null) {
+      const endR = maxRange * pxPerM * 0.95;
+      const { px: tlx, py: tly } = toXY(maxRange * 0.95, thetaLC);
+      c.save();
+      c.strokeStyle = 'rgba(230,189,88,0.6)';
+      c.lineWidth = 1.5;
+      c.setLineDash([6, 4]);
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.lineTo(tlx, tly);
+      c.stroke();
+      c.restore();
+
+      // Label
+      c.fillStyle = 'rgba(230,189,88,0.7)';
+      c.font = '9px Segoe UI';
+      c.fillText(`θLC=${thetaLC.toFixed(3)}`, tlx + 6, tly - 4);
+    }
+
+    // --- Visual bearing angle line (green) ---
+    if (fusionResult.visual_bearing_rad !== null) {
+      const vb = fusionResult.visual_bearing_rad;
+      const { px: vbx, py: vby } = toXY(maxRange * 0.9, vb);
+      c.save();
+      c.strokeStyle = 'rgba(100,220,100,0.7)';
+      c.lineWidth = 1.5;
+      c.setLineDash([4, 3]);
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.lineTo(vbx, vby);
+      c.stroke();
+      c.restore();
+
+      c.fillStyle = 'rgba(100,220,100,0.8)';
+      c.font = '9px Segoe UI';
+      c.fillText(`VIS ${fusionResult.visual_bearing_deg.toFixed(1)}°`, vbx + 6, vby + 12);
+    }
+
+    // --- bbox_depth_m reference arc ---
+    const bboxDepth = Number.isFinite(+sc.bbox_depth_m) ? +sc.bbox_depth_m : null;
+    if (bboxDepth !== null && bboxDepth <= maxRange && bboxDepth > 0) {
+      c.save();
+      c.strokeStyle = 'rgba(180,100,220,0.7)';
+      c.lineWidth = 1.5;
+      c.setLineDash([5, 4]);
+      c.beginPath();
+      c.arc(cx, cy, bboxDepth * pxPerM, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+
+      // Label
+      c.fillStyle = 'rgba(180,100,220,0.8)';
+      c.font = '9px Segoe UI';
+      c.fillText(`bbox ${bboxDepth.toFixed(2)}m`, cx + bboxDepth * pxPerM + 5, cy - 4);
+    }
+
+    // --- Fusion distance reference arc ---
+    if (fusionResult.fusion_distance !== null && fusionResult.fusion_distance <= maxRange && fusionResult.fusion_distance > 0) {
+      c.save();
+      c.strokeStyle = 'rgba(100,220,100,0.7)';
+      c.lineWidth = 1.5;
+      c.setLineDash([3, 3]);
+      c.beginPath();
+      c.arc(cx, cy, fusionResult.fusion_distance * pxPerM, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+
+      c.fillStyle = 'rgba(100,220,100,0.8)';
+      c.font = '9px Segoe UI';
+      c.fillText(`fus ${fusionResult.fusion_distance.toFixed(2)}m`, cx + fusionResult.fusion_distance * pxPerM + 5, cy + 12);
+    }
+
+    // --- Robot icon ---
+    c.save();
+    c.fillStyle = 'rgba(113,216,215,0.9)';
+    c.beginPath();
+    c.moveTo(cx, cy - 8);
+    c.lineTo(cx - 5, cy + 4);
+    c.lineTo(cx + 5, cy + 4);
+    c.closePath();
+    c.fill();
+    c.restore();
+  }
+
+  /* --- Fusion Debug Card Rendering --- */
+  function renderFusionDebug() {
+    const s = latestStatus;
+    const fv = (v, d) => (v != null && Number.isFinite(+v)) ? (+v).toFixed(d || 3) : 'N/A';
+    domFDThetaLC.textContent    = fv(s && s.theta_lidar_center);
+    domFDSectorHalf.textContent = fv(s && s.sector_half_angle);
+    domFDSectorPts.textContent  = (s && s.sector_points != null) ? String(s.sector_points) : 'N/A';
+    domFDClusterCnt.textContent = (s && s.cluster_count != null) ? String(s.cluster_count) : 'N/A';
+    domFDSelRange.textContent   = fv(s && s.selected_cluster_range);
+    domFDSelAngle.textContent   = fv(s && s.selected_cluster_angle);
+    domFDSelScore.textContent   = fv(s && s.selected_cluster_score);
+    domFDSelReason.textContent  = (s && s.selected_cluster_reason != null) ? String(s.selected_cluster_reason) : 'N/A';
+    domFDSelReject.textContent  = (s && s.selected_cluster_reject_reason != null) ? String(s.selected_cluster_reject_reason) : 'N/A';
+    domFDBboxDepth.textContent  = fv(s && s.bbox_depth_m);
+    domFDBboxErr.textContent    = fv(s && s.bbox_depth_err);
+    domFDClustersDbg.textContent = (s && s.clusters_dbg) ? String(s.clusters_dbg) : 'N/A';
+  }
+
+  /* --- Fusion Diagnostics Rendering --- */
+  function renderFusionDiagnostics() {
+    const fv = (v, d) => (v != null && Number.isFinite(+v)) ? (+v).toFixed(d || 3) : 'N/A';
+    const fp = (v) => (v != null && Number.isFinite(+v)) ? (+v).toFixed(2) : 'N/A';
+
+    domFusBearingRad.textContent = fv(fusionResult.visual_bearing_rad, 4);
+    domFusBearingDeg.textContent = fv(fusionResult.visual_bearing_deg, 2);
+    domFusSectorMin.textContent = fp(fusionResult.sector_min_dist);
+    domFusSectorPts.textContent = fusionResult.sector_point_count > 0 ? String(fusionResult.sector_point_count) : '0';
+    domFusSectorDensity.textContent = fp(fusionResult.sector_density);
+
+    const wallVal = fusionResult.wall_suspicion;
+    domFusWall.textContent = fp(wallVal);
+    domFusWall.style.color = wallVal > 0.6 ? 'var(--red)' : wallVal > 0.3 ? 'var(--amber)' : 'var(--green)';
+
+    const fgVal = fusionResult.foreground_suspicion;
+    domFusFg.textContent = fp(fgVal);
+    domFusFg.style.color = fgVal > 0.5 ? 'var(--green)' : fgVal > 0.3 ? 'var(--amber)' : 'var(--muted)';
+
+    domFusDist.textContent = fp(fusionResult.fusion_distance);
+    domFusConf.textContent = fp(fusionResult.fusion_confidence);
+
+    domFusReject.textContent = fusionResult.reject_reason;
+    domFusReject.style.color = fusionResult.reject_reason !== '-' ? 'var(--amber)' : 'var(--muted)';
+    domFusSelected.textContent = fusionResult.selected_reason;
+    domFusSelected.style.color = fusionResult.selected_reason !== '-' ? 'var(--cyan)' : 'var(--muted)';
+
+    let verdictText = 'NO TARGET';
+    let verdictClass = 'none';
+
+    if (fusionResult.visual_bearing_rad !== null) {
+      if (fusionResult.reject_reason !== '-') {
+        verdictText = `REJECTED: ${fusionResult.reject_reason}`;
+        verdictClass = 'alert';
+      } else if (fusionResult.fusion_confidence > 0.5) {
+        verdictText = `FUSED: dist=${fp(fusionResult.fusion_distance)}m conf=${fp(fusionResult.fusion_confidence)}`;
+        verdictClass = 'ok';
+      } else if (fusionResult.fusion_confidence > 0.2) {
+        verdictText = `WEAK: dist=${fp(fusionResult.fusion_distance)}m conf=${fp(fusionResult.fusion_confidence)}`;
+        verdictClass = 'warn';
+      } else {
+        verdictText = `LOW CONF: dist=${fp(fusionResult.fusion_distance)}m conf=${fp(fusionResult.fusion_confidence)}`;
+        verdictClass = 'warn';
+      }
+    }
+
+    domFusVerdict.textContent = verdictText;
+    domFusVerdict.className = `fusion-verdict ${verdictClass}`;
+  }
+
   /* ============================================
      Fragment 70: Controls (Camera, Tuning, Actions)
      FORBIDDEN: no enable_control toggle, no ackermann publisher
@@ -1054,8 +1776,23 @@
     domFSMode.textContent = s.mode || '-';
     // enable_control: show from status if present, otherwise show false
     const ec = s.enable_control;
-    domFSEnable.textContent = (ec === true) ? 'true' : (ec === false || ec == null) ? 'false (dry-run)' : String(ec);
-    domFSEnable.style.color = ec ? 'var(--amber)' : 'var(--muted)';
+    domFSEnable.textContent = (ec === true) ? 'true' : (ec === false || ec == null) ? 'false' : String(ec);
+    domFSEnable.style.color = ec ? 'var(--green)' : 'var(--muted)';
+
+    // Dry-run / Live badge
+    if (ec === true) {
+      domBadgeDryrun.textContent = 'LIVE';
+      domBadgeDryrun.className = 'badge green';
+      domVidDryrun.textContent = 'LIVE';
+      domVidDryrun.className = 'badge green';
+      domVidDryrun.style.fontSize = '10px';
+    } else {
+      domBadgeDryrun.textContent = 'DRY-RUN';
+      domBadgeDryrun.className = 'badge amber';
+      domVidDryrun.textContent = 'DRY-RUN';
+      domVidDryrun.className = 'badge amber';
+      domVidDryrun.style.fontSize = '10px';
+    }
 
     domFSPublish.textContent = s.publishing ? 'true' : 'false';
     domFSPublish.style.color = s.publishing ? 'var(--green)' : 'var(--blue-gray)';
@@ -1145,9 +1882,12 @@
   }
 
   function renderAll() {
+    computeFusion();
     renderFollowState();
     renderCommand();
     renderSafety();
+    renderFusionDebug();
+    renderFusionDiagnostics();
     syncTuningFromStatus();
     renderMjpegStatus();
     updateBadgeSystem();
@@ -1155,12 +1895,13 @@
 
   /* --- FPS Counter --- */
   setInterval(() => {
-    domBottomStatus.textContent = `tgt=${targetFrames} ovl=${overlayFrames} sts=${statusFrames}`;
-    targetFrames = 0; overlayFrames = 0; statusFrames = 0;
+    domBottomStatus.textContent = `tgt=${targetFrames} ovl=${overlayFrames} sts=${statusFrames} scan=${scanFrames}`;
+    targetFrames = 0; overlayFrames = 0; statusFrames = 0; scanFrames = 0;
   }, 1000);
 
   /* --- Main Loops --- */
   setInterval(drawOverlay, OVERLAY_DRAW_MS);
+  setInterval(drawLidar, OVERLAY_DRAW_MS);
   setInterval(renderAll, DOM_UPDATE_MS);
   /* ============================================
      Fragment 90: Initialization, Event Listeners, Close
@@ -1206,7 +1947,7 @@
   });
   domActionFollow.addEventListener('click', () => {
     publishMode('FOLLOW');
-    domBottomStatus.textContent = 'mode=FOLLOW sent (dry-run)';
+    domBottomStatus.textContent = 'mode=FOLLOW sent';
   });
   domActionCheck.addEventListener('click', () => {
     // Local check only — no ROS/SSH
@@ -1215,7 +1956,7 @@
     info.push(`mjpeg: ${sessionState}`);
     info.push(`mode: ${latestStatus ? latestStatus.mode : '-'}`);
     info.push(`publishing: ${latestStatus ? latestStatus.publishing : '-'}`);
-    info.push(`enable_control: false (dry-run)`);
+    info.push(`enable_control: ${latestStatus ? (latestStatus.enable_control ? 'true' : 'false') : '-'}`);
     info.push(`cmd_speed: ${latestStatus ? latestStatus.speed_cmd : '-'}`);
     info.push(`v_odom: ${latestStatus ? latestStatus.v_odom : '-'}`);
     alert('Local Status Check:\n\n' + info.join('\n'));
@@ -1236,7 +1977,7 @@
     domPlaceholder.style.display = 'flex';
     if (desiredOnline) { setSession('stale'); reconnectMjpeg('image error'); }
   });
-  window.addEventListener('resize', drawOverlay);
+  window.addEventListener('resize', () => { drawOverlay(); drawLidar(); });
 
   /* --- Init connection --- */
   const initCfg = loadConfig();

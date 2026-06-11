@@ -149,7 +149,7 @@ exec bash"
 else
   FOLLOW_CMD="$ENV_PREFIX
 ros2 launch kt_visual_lidar_follow kt_follow_controller_v4.launch.py \
-  enable_control:=false \
+  enable_control:=true \
   odom_topic:=/tianracer/odom \
   scan_topic:=/tianracer/scan \
   targets_topic:=/bear_detection/targets \
